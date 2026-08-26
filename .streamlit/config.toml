@@ -1,0 +1,23 @@
+[client]
+# "minimal" only shows menu items that are explicitly set in code (e.g. via
+# st.set_page_config(menu_items=...)). Since this app doesn't set any, the
+# hamburger menu itself won't render for viewers at all. This is separate
+# from the Fork/GitHub badge on Community Cloud, which is controlled by
+# repo visibility, not this setting.
+toolbarMode = "minimal"
+
+[theme]
+# Without this section, Streamlit's *native* widgets (st.warning/st.info,
+# st.radio, st.number_input, st.button, st.metric, dataframes, etc.) fall
+# back to Streamlit's own default theme rather than the custom white/light
+# CSS defined in app.py — which is why the "1D/1M" radio labels and
+# st.warning text rendered white-on-light (invisible), and why the
+# Portfolio Qty/Buy Price number_input boxes rendered dark. Setting an
+# explicit light base here makes every native widget consistent with the
+# custom-styled cards and text.
+base = "light"
+primaryColor = "#22C55E"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F6F8"
+textColor = "#111827"
+font = "sans serif"
