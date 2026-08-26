@@ -53,15 +53,15 @@ def classify_sentiment(title: str, description: str = "") -> dict:
     neg_hits = sum(1 for kw in _NEGATIVE_KEYWORDS if kw in text)
 
     if pos_hits > neg_hits + 1:
-        return {"label": "Positive", "icon": "🟢", "color": "#22C55E", "score": 1}
+        return {"label": "Positive", "icon": "🟢", "color": "#166534", "score": 1}
     elif neg_hits > pos_hits + 1:
-        return {"label": "Negative", "icon": "🔴", "color": "#EF4444", "score": -1}
+        return {"label": "Negative", "icon": "🔴", "color": "#B91C1C", "score": -1}
     elif pos_hits > neg_hits:
-        return {"label": "Positive", "icon": "🟢", "color": "#22C55E", "score": 1}
+        return {"label": "Positive", "icon": "🟢", "color": "#166534", "score": 1}
     elif neg_hits > pos_hits:
-        return {"label": "Negative", "icon": "🔴", "color": "#EF4444", "score": -1}
+        return {"label": "Negative", "icon": "🔴", "color": "#B91C1C", "score": -1}
     else:
-        return {"label": "Neutral", "icon": "🟡", "color": "#F59E0B", "score": 0}
+        return {"label": "Neutral", "icon": "🟡", "color": "#92400E", "score": 0}
 
 
 def _title_fingerprint(title: str) -> str:
@@ -122,11 +122,11 @@ def compute_overall_sentiment(enriched_articles: list[dict]) -> dict:
     avg = sum(scores) / total
 
     if avg > 0.25:
-        label, icon, color = "Positive", "🟢", "#22C55E"
+        label, icon, color = "Positive", "🟢", "#166534"
     elif avg < -0.25:
-        label, icon, color = "Negative", "🔴", "#EF4444"
+        label, icon, color = "Negative", "🔴", "#B91C1C"
     else:
-        label, icon, color = "Neutral", "🟡", "#F59E0B"
+        label, icon, color = "Neutral", "🟡", "#92400E"
 
     return {
         "label": label, "icon": icon, "color": color,

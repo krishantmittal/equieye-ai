@@ -119,12 +119,16 @@ def detect_turnaround(fin, bs, revenue_cagr: float | None = None) -> dict | None
 
 
 # (min_score_inclusive, label, color)
+# Colours here are rendered as TEXT, so they use the darker accessible
+# steps rather than the vivid mark colours used for chart series and fills.
+# The vivid equivalents measure as low as 1.95:1 against a light surface,
+# well under the 4.5:1 WCAG body-text minimum; each value below clears it.
 _VALUATION_BUCKETS = [
-    (8.5, "Inexpensive / Potentially Undervalued", "#16A34A"),
-    (6.5, "Cheap", "#22C55E"),
-    (4.0, "Fair", "#F59E0B"),
-    (2.0, "Expensive", "#F97316"),
-    (0.0, "Very Expensive", "#EF4444"),
+    (8.5, "Inexpensive / Potentially Undervalued", "#166534"),
+    (6.5, "Cheap", "#166534"),
+    (4.0, "Fair", "#92400E"),
+    (2.0, "Expensive", "#9A3412"),
+    (0.0, "Very Expensive", "#B91C1C"),
 ]
 
 
@@ -134,8 +138,8 @@ def valuation_bucket(score: float | None) -> tuple[str, str]:
     relative (scored against each sector's own PE/P-B/EV-EBITDA/P-S bands),
     so this is a finer-grained readout of that number, not a new calc."""
     if score is None:
-        return "Unknown", "#6B7280"
+        return "Unknown", "#5B6673"
     for threshold, label, color in _VALUATION_BUCKETS:
         if score >= threshold:
             return label, color
-    return "Very Expensive", "#EF4444"
+    return "Very Expensive", "#B91C1C"

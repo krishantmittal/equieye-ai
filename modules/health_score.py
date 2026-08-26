@@ -761,7 +761,7 @@ def compute_health_score(
 
     score = round(weighted_sum / total_weight, 1) if total_weight > 0 else None
 
-    color = "#22C55E" if (score or 0) >= 7 else "#F59E0B" if (score or 0) >= 5 else "#EF4444"
+    color = "#166534" if (score or 0) >= 7 else "#92400E" if (score or 0) >= 5 else "#B91C1C"
     explanation = _build_explanation(score, pillar_scores, weights, cfg)
 
     # Return sub_scores keyed by pillar name (UI reads this for breakdown bars)

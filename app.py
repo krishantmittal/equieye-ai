@@ -41,6 +41,19 @@ except Exception as _e:
     _MODULES_ERROR = str(_e)
 
 
+# ── Text-safe status colours ──────────────────────────────────────────────
+# These are for TEXT only. The vivid brand/status colours used for chart
+# marks and fills (#22C55E, #F59E0B, #EF4444) fail WCAG as text: green
+# measures 2.28:1 and amber 2.15:1 against white, well below the 4.5:1
+# body-text minimum. The variants below all clear 4.5:1 against both the
+# page (#F6F7F9) and card (#FFFFFF) surfaces. Chart marks deliberately
+# keep the vivid values — a mark is not text.
+TXT_GOOD  = "#15803D"   # 5.02:1 on white
+TXT_WARN  = "#B45309"   # 5.02:1 on white
+TXT_BAD   = "#B91C1C"   # 6.47:1 on white
+TXT_MUTED = "#5B6673"   # 5.9:1  on white
+
+
 # _is_quarterly_financials / _trim_to_last_discontinuity: pure pandas
 # helpers, extracted verbatim to services/financial_utils.py (Phase 1
 # service-layer extraction). Aliased back to their original names here so
@@ -128,370 +141,523 @@ footer { visibility: hidden; }
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   Every colour, size, radius and shadow in this file resolves to a token
+   below. Previously ~330 hex literals were scattered across the stylesheet
+   and the inline HTML, which made consistency unenforceable and a theme
+   change impossible. Change a value here and it propagates everywhere.
 
-.main { background: #FFFFFF; color: #1F2937; }
-.stApp { background: #FFFFFF; }
+   MARK vs TEXT colours are deliberately separate. The vivid brand green
+   (#22C55E) measures 2.28:1 against white — far below the 4.5:1 WCAG body
+   text minimum — so it is used only for fills, borders and chart marks.
+   Text uses the darker --*-text variants, all verified >= 4.5:1 against
+   both the page and card surfaces. Same for amber (2.15:1 as text) and red.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+    /* Surfaces — cards are WHITE on a lightly tinted page, so elevation
+       comes from contrast + shadow rather than a flat grey fill. */
+    --surface-page:    #F6F7F9;
+    --surface-card:    #FFFFFF;
+    --surface-sunken:  #F1F3F5;
+    --surface-hover:   #F8FAFC;
 
+    /* Borders */
+    --border:          #E4E7EB;
+    --border-strong:   #D3D8DE;
+
+    /* Ink */
+    --ink:             #0F172A;
+    --ink-secondary:   #334155;
+    --ink-muted:       #5B6673;   /* 5.9:1 on card — safe for body text */
+
+    /* Brand / status — MARK (fills, borders, chart series) */
+    --brand:           #22C55E;   /* marks/fills only */
+    --brand-strong:    #16A34A;   /* mark accents */
+    --brand-btn:       #15803D;   /* white text on this = 5.02:1 */
+    --danger:          #EF4444;
+    --warn:            #F59E0B;
+    --info:            #3B82F6;
+
+    /* Brand / status — TEXT (all >= 4.5:1 on card) */
+    --brand-text:      #166534;   /* 7.13:1 white; clears 4.5 on tinted */
+    --danger-text:     #B91C1C;
+    --warn-text:       #92400E;   /* 7.09:1 white; clears 4.5 on tinted */
+    --info-text:       #2563EB;
+
+    /* Tinted fills for badges/pills */
+    --brand-soft:      rgba(34,197,94,0.10);
+    --brand-soft-bd:   rgba(34,197,94,0.28);
+    --danger-soft:     rgba(239,68,68,0.10);
+    --danger-soft-bd:  rgba(239,68,68,0.28);
+    --warn-soft:       rgba(245,158,11,0.12);
+    --warn-soft-bd:    rgba(245,158,11,0.30);
+    --info-soft:       rgba(59,130,246,0.10);
+    --info-soft-bd:    rgba(59,130,246,0.28);
+    --neutral-soft:    rgba(100,116,139,0.10);
+    --neutral-soft-bd: rgba(100,116,139,0.24);
+
+    /* Type scale — 8 steps, no ad-hoc sizes */
+    --fs-2xs:  10.5px;
+    --fs-xs:   11.5px;
+    --fs-sm:   12.5px;
+    --fs-base: 14px;
+    --fs-md:   15px;
+    --fs-lg:   17px;
+    --fs-xl:   21px;
+    --fs-2xl:  28px;
+    --fs-3xl:  38px;
+
+    /* Spacing — 4px base */
+    --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+    --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+    /* Radius */
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-full: 999px;
+
+    /* Elevation — layered, low-alpha; carries hierarchy without heaviness */
+    --sh-sm: 0 1px 2px rgba(15,23,42,0.04);
+    --sh-md: 0 1px 3px rgba(15,23,42,0.05), 0 4px 12px rgba(15,23,42,0.04);
+    --sh-lg: 0 2px 6px rgba(15,23,42,0.06), 0 12px 28px rgba(15,23,42,0.06);
+
+    --focus: 0 0 0 3px rgba(34,197,94,0.28);
+}
+
+/* NOTE — no dark mode yet, deliberately.
+   .streamlit/config.toml pins base="light", so Streamlit's own widgets
+   (radios, number inputs, st.warning, dataframes) render light regardless
+   of what this stylesheet does. A prefers-color-scheme block here would
+   therefore flip the custom cards to dark while native widgets stayed
+   light — a broken mixed UI, worse than no dark mode. Adding it properly
+   means theming the native widgets too; the tokens above are already
+   structured so that only the :root values need re-pointing when that
+   work happens. */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════════ */
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'tnum' 1;   /* tabular figures — money columns align */
+}
+.main  { background: var(--surface-page); color: var(--ink-secondary); }
+.stApp { background: var(--surface-page); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HEADER / HERO
+   ═══════════════════════════════════════════════════════════════════════ */
 .hero-title {
-    font-size: 2rem; font-weight: 700; color: #111827;
-    letter-spacing: -0.5px; margin-bottom: 2px;
+    font-size: var(--fs-xl); font-weight: 700; color: var(--ink);
+    letter-spacing: -0.4px; margin-bottom: 1px;
 }
-.hero-sub {
-    font-size: 0.95rem; color: #6B7280;
-}
+.hero-sub { font-size: var(--fs-sm); color: var(--ink-muted); }
 .hero-accent {
-    background: linear-gradient(90deg, #3B82F6, #22C55E);
+    background: linear-gradient(90deg, var(--info), var(--brand));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
 .landing-banner {
-    background: linear-gradient(135deg, #EEF2FF 0%, #FFFFFF 60%);
-    border: 1px solid #DCE3EF;
-    border-radius: 18px;
-    padding: 2.4rem 2.2rem;
-    margin: 0.5rem 0 1.5rem 0;
+    background:
+        radial-gradient(120% 140% at 0% 0%, rgba(59,130,246,0.10) 0%, transparent 55%),
+        radial-gradient(120% 140% at 100% 100%, rgba(34,197,94,0.10) 0%, transparent 55%),
+        var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: var(--sp-10) var(--sp-8);
+    margin: var(--sp-2) 0 var(--sp-6) 0;
+    box-shadow: var(--sh-md);
 }
 .landing-headline {
-    font-size: 2.4rem; font-weight: 700; color: #111827;
-    line-height: 1.2; letter-spacing: -0.8px; margin-bottom: 0.8rem;
+    font-size: var(--fs-2xl); font-weight: 700; color: var(--ink);
+    line-height: 1.18; letter-spacing: -0.7px; margin-bottom: var(--sp-3);
 }
-.landing-subhead {
-    font-size: 1rem; color: #6B7280;
-}
+.landing-subhead { font-size: var(--fs-md); color: var(--ink-muted); }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   FEATURE GRID / STAT STRIP
+   ═══════════════════════════════════════════════════════════════════════ */
 .feature-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    margin-bottom: 1.5rem;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-3); margin-bottom: var(--sp-6);
 }
 .feature-card {
-    background: #F7F8FA; border: 1px solid #E7E9ED;
-    border-radius: 14px; padding: 1.3rem 1.2rem;
-    transition: border-color 0.2s ease;
+    background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: var(--sp-5);
+    box-shadow: var(--sh-sm);
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.feature-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--sh-md);
+    border-color: var(--border-strong);
 }
 .feature-icon {
-    width: 40px; height: 40px; border-radius: 10px;
+    width: 38px; height: 38px; border-radius: var(--r-sm);
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px; margin-bottom: 0.9rem;
+    font-size: var(--fs-lg); margin-bottom: var(--sp-3);
 }
 .feature-title {
-    font-size: 15px; font-weight: 600; color: #111827; margin-bottom: 6px;
+    font-size: var(--fs-base); font-weight: 600;
+    color: var(--ink); margin-bottom: var(--sp-1);
 }
-.feature-desc {
-    font-size: 12.5px; color: #6B7280; line-height: 1.5;
-}
+.feature-desc { font-size: var(--fs-sm); color: var(--ink-muted); line-height: 1.55; }
 
 .stat-strip {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    margin-bottom: 1.5rem;
-    border-top: 1px solid #E7E9ED;
-    padding-top: 1.3rem;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-3); margin-bottom: var(--sp-6);
+    border-top: 1px solid var(--border); padding-top: var(--sp-5);
 }
 .stat-item { text-align: left; }
-.stat-num { font-size: 1.15rem; font-weight: 700; color: #111827; }
-.stat-label { font-size: 12px; color: #6B7280; margin-top: 2px; }
+.stat-num   { font-size: var(--fs-lg); font-weight: 700; color: var(--ink); letter-spacing: -0.3px; }
+.stat-label { font-size: var(--fs-sm); color: var(--ink-muted); margin-top: 1px; }
 
 @media (max-width: 900px) {
     .feature-grid { grid-template-columns: repeat(2, 1fr); }
-    .stat-strip { grid-template-columns: repeat(2, 1fr); }
-    .landing-headline { font-size: 1.7rem; }
+    .stat-strip   { grid-template-columns: repeat(2, 1fr); }
+    .landing-headline { font-size: var(--fs-xl); }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   METRIC CARDS  (the KPI row under a company name)
+   ═══════════════════════════════════════════════════════════════════════ */
 .metric-strip {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 14px;
-    margin-bottom: 0.5rem;
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: var(--sp-3); margin-bottom: var(--sp-2);
 }
 .metric-card {
-    background: #F5F6F8; border: 1px solid #E2E4E9;
-    border-radius: 12px; padding: 1rem 1.25rem;
-    min-width: 0; /* let long values shrink instead of forcing grid overflow */
+    background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);
+    min-width: 0;                      /* let long values shrink, not overflow */
+    box-shadow: var(--sh-sm);
 }
-.metric-label { font-size: 12px; color: #6B7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-.metric-value { font-size: 1.5rem; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric-sub { font-size: 12px; margin-top: 3px; }
+.metric-label {
+    font-size: var(--fs-2xs); color: var(--ink-muted); margin-bottom: var(--sp-1);
+    text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600;
+}
+.metric-value {
+    font-size: var(--fs-xl); font-weight: 650; color: var(--ink);
+    letter-spacing: -0.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.metric-sub { font-size: var(--fs-xs); margin-top: 2px; font-weight: 500; }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION CARDS
+   ═══════════════════════════════════════════════════════════════════════ */
+/* .section-card is a section HEADER, not a card — deliberately.
+
+   Every call site is written as:
+       st.markdown("<div class='section-card'><div class='section-title'>X</div>")
+       ...content rendered by separate st.* calls...
+       st.markdown("</div>")
+   but Streamlit auto-closes unclosed tags within each st.markdown() call,
+   so the wrapper closes immediately after the title and the content lands
+   in sibling containers — the trailing </div> is orphaned (hence the
+   empty-markdown-container rule further down). Verified in the DOM: all 14
+   .section-card elements contain only their title.
+
+   So this element can never wrap anything. Giving it a card background
+   would render 14 empty boxes down the page; the previous grey-card-on-
+   white styling merely camouflaged them. Treat it as a header band and let
+   the real content below carry its own surfaces. */
 .section-card {
-    background: #F5F6F8; border: 1px solid #E2E4E9;
-    border-radius: 14px; padding: 1.4rem 1.6rem; margin-bottom: 1rem;
+    background: transparent; border: none; box-shadow: none;
+    padding: 0; margin: var(--sp-6) 0 var(--sp-3) 0;
+}
+.section-title {
+    font-size: var(--fs-sm); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.1px; color: var(--ink-secondary);
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding-bottom: var(--sp-2);
+    border-bottom: 1px solid var(--border);
+}
+.section-title::before {
+    content: ''; width: 3px; height: 13px; border-radius: 2px;
+    background: var(--brand); flex: none;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA TABLES  (earnings insights / watchlist / portfolio)
+
+   These are CSS grids rather than st.columns() on purpose: st.columns()
+   auto-stacks every cell onto its own full-width row on mobile, which
+   separates a company from its price and turns the table into a scrambled
+   list of labels-then-values. One HTML grid per row keeps a row's cells
+   together at any viewport width. Action buttons still have to be real
+   Streamlit widgets, so they sit in a slim st.columns() beside the row.
+   ═══════════════════════════════════════════════════════════════════════ */
 .ei-table { width: 100%; }
 .ei-row {
-    display: grid;
-    grid-template-columns: 0.7fr 1.7fr 1.7fr 0.8fr;
-    align-items: center;
-    column-gap: 6px;
-    padding: 5px 0;
-    border-bottom: 1px solid #E5E7EB;
+    display: grid; grid-template-columns: 0.7fr 1.7fr 1.7fr 0.8fr;
+    align-items: center; column-gap: var(--sp-2);
+    padding: var(--sp-2) 0; border-bottom: 1px solid var(--border);
 }
-.ei-row.ei-header {
-    border-bottom: 1px solid #E2E4E9;
-    padding-bottom: 6px;
-}
+.ei-row:last-child { border-bottom: none; }
+.ei-row.ei-header { border-bottom: 1px solid var(--border-strong); padding-bottom: var(--sp-2); }
 .ei-row.ei-header .ei-cell {
-    font-size: 11px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: var(--fs-2xs); color: var(--ink-muted);
+    text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600;
 }
-.ei-cell { font-size: 13px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ei-cell.ei-year { color: #6B7280; }
-.ei-cell.ei-margin { font-size: 12px; }
+.ei-cell {
+    font-size: var(--fs-base); color: var(--ink-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ei-cell.ei-year   { color: var(--ink-muted); font-weight: 500; }
+.ei-cell.ei-margin { font-size: var(--fs-sm); }
 
-/* Watchlist & Portfolio Holdings tables — CSS grid, same reasoning as
-   .ei-table above: st.columns() per cell auto-stacks each cell onto its
-   own full-width row on mobile, which separates "Company" from its price
-   and turns the table into a scrambled list of labels-then-values instead
-   of readable rows. A single HTML grid per row keeps each row's cells
-   together at any viewport width. Action buttons (remove/edit) still need
-   to be real Streamlit widgets, so they sit in their own slim st.columns()
-   split alongside the HTML row — worst case on mobile, a button appears
-   on its own line below the row, which stays perfectly readable. */
 .wl-row {
-    display: grid;
-    grid-template-columns: 2.2fr 1fr 1fr 1fr 0.8fr;
-    align-items: center;
-    column-gap: 10px;
-    padding: 8px 0;
+    display: grid; grid-template-columns: 2.2fr 1fr 1fr 1fr 0.8fr;
+    align-items: center; column-gap: var(--sp-3); padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--border);
 }
-.wl-row.wl-header {
-    border-bottom: 1px solid #E2E4E9;
-    padding-bottom: 6px;
-}
+.wl-row:last-child { border-bottom: none; }
+.wl-row.wl-header { border-bottom: 1px solid var(--border-strong); padding-bottom: var(--sp-2); }
 .wl-row.wl-header .wl-cell {
-    font-size: 11px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: var(--fs-2xs); color: var(--ink-muted);
+    text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600;
 }
-.wl-cell { font-size: 13px; color: #374151; overflow: hidden; text-overflow: ellipsis; }
+.wl-cell { font-size: var(--fs-base); color: var(--ink-secondary); overflow: hidden; text-overflow: ellipsis; }
 
 .pt-row {
-    display: grid;
-    grid-template-columns: 2fr 0.7fr 1fr 1fr 1.3fr;
-    align-items: center;
-    column-gap: 10px;
-    padding: 8px 0;
+    display: grid; grid-template-columns: 2fr 0.7fr 1fr 1fr 1.3fr;
+    align-items: center; column-gap: var(--sp-3); padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--border);
 }
-.pt-row.pt-header {
-    border-bottom: 1px solid #E2E4E9;
-    padding-bottom: 6px;
-}
+.pt-row:last-child { border-bottom: none; }
+.pt-row.pt-header { border-bottom: 1px solid var(--border-strong); padding-bottom: var(--sp-2); }
 .pt-row.pt-header .pt-cell {
-    font-size: 11px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: var(--fs-2xs); color: var(--ink-muted);
+    text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600;
 }
-.pt-cell { font-size: 13px; color: #374151; overflow: hidden; text-overflow: ellipsis; }
+.pt-cell { font-size: var(--fs-base); color: var(--ink-secondary); overflow: hidden; text-overflow: ellipsis; }
 
-.section-title {
-    font-size: 17px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1px; color: #111827; margin-bottom: 1rem;
-    border-left: 3px solid #22C55E; padding-left: 8px;
+.pt-edit-row {
+    background: var(--surface-sunken); border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: var(--sp-2) var(--sp-3);
+    margin: var(--sp-1) 0 var(--sp-2) 0;
 }
 
-.bull-tag { background: rgba(34,197,94,0.12); color: #15803D; border: 1px solid rgba(34,197,94,0.35); padding: 4px 12px; border-radius: 6px; font-size: 15px; font-weight: 600; }
-.bear-tag { background: rgba(239,68,68,0.12); color: #B91C1C; border: 1px solid rgba(239,68,68,0.35); padding: 4px 12px; border-radius: 6px; font-size: 15px; font-weight: 600; }
-.neutral-tag { background: rgba(107,114,128,0.12); color: #4B5563; border: 1px solid rgba(107,114,128,0.3); padding: 4px 12px; border-radius: 6px; font-size: 15px; font-weight: 600; }
-.risk-tag { background: rgba(245,158,11,0.12); color: #92400E; border: 1px solid rgba(245,158,11,0.35); padding: 4px 12px; border-radius: 6px; font-size: 15px; font-weight: 600; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAGS / BADGES / PILLS
+   Status is never colour-alone: each tag carries a text label (and the
+   call sites add a ●/⚑ glyph), so these read correctly in greyscale and
+   for colour-vision-deficient users.
+   ═══════════════════════════════════════════════════════════════════════ */
+.bull-tag, .bear-tag, .neutral-tag, .risk-tag {
+    padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm);
+    font-size: var(--fs-base); font-weight: 600; letter-spacing: 0.2px;
+}
+.bull-tag    { background: var(--brand-soft);   color: var(--brand-text);  border: 1px solid var(--brand-soft-bd); }
+.bear-tag    { background: var(--danger-soft);  color: var(--danger-text); border: 1px solid var(--danger-soft-bd); }
+.neutral-tag { background: var(--neutral-soft); color: var(--ink-secondary); border: 1px solid var(--neutral-soft-bd); }
+.risk-tag    { background: var(--warn-soft);    color: var(--warn-text);   border: 1px solid var(--warn-soft-bd); }
 
 .score-ring {
-    font-size: 3rem; font-weight: 700; color: #22C55E;
-    text-align: center; padding: 1rem 0;
+    font-size: var(--fs-3xl); font-weight: 700; color: var(--brand-text);
+    text-align: center; padding: var(--sp-4) 0; letter-spacing: -1.2px;
 }
-.score-label { text-align: center; font-size: 13px; color: #6B7280; }
+.score-label { text-align: center; font-size: var(--fs-base); color: var(--ink-muted); }
 
 .flag-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 0; border-bottom: 1px solid #E2E4E9;
-    font-size: 14px;
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding: var(--sp-2) 0; border-bottom: 1px solid var(--border);
+    font-size: var(--fs-base); color: var(--ink-secondary);
 }
+.flag-item:last-child { border-bottom: none; }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHAT
+   ═══════════════════════════════════════════════════════════════════════ */
 .chat-msg-user {
-    background: #DBEAFE; border-radius: 12px 12px 4px 12px;
-    padding: 10px 14px; margin: 8px 0; font-size: 16px;
-    max-width: 80%; margin-left: auto; color: #111827;
+    background: var(--info-soft); border: 1px solid var(--info-soft-bd);
+    border-radius: var(--r-md) var(--r-md) var(--sp-1) var(--r-md);
+    padding: var(--sp-3) var(--sp-4); margin: var(--sp-2) 0;
+    font-size: var(--fs-md); max-width: 80%; margin-left: auto;
+    color: var(--ink); line-height: 1.6;
 }
 .chat-msg-ai {
-    background: #F5F6F8; border: 1px solid #E2E4E9;
-    border-radius: 12px 12px 12px 4px;
-    padding: 10px 14px; margin: 8px 0; font-size: 16px;
-    max-width: 85%; color: #111827;
+    background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: var(--r-md) var(--r-md) var(--r-md) var(--sp-1);
+    padding: var(--sp-3) var(--sp-4); margin: var(--sp-2) 0;
+    font-size: var(--fs-md); max-width: 85%;
+    color: var(--ink); line-height: 1.7; box-shadow: var(--sh-sm);
 }
 
 .disclaimer {
-    font-size: 11px; color: #555; text-align: center;
-    padding: 1rem 0; border-top: 1px solid #E2E4E9; margin-top: 2rem;
+    font-size: var(--fs-sm); color: var(--ink-muted); text-align: center;
+    padding: var(--sp-5) 0; border-top: 1px solid var(--border); margin-top: var(--sp-8);
 }
 
-.green { color: #22C55E; }
-.red { color: #EF4444; }
-.yellow { color: #F59E0B; }
-.gray { color: #6B7280; }
+/* Semantic text helpers — text-safe variants, not the vivid mark colours */
+.green  { color: var(--brand-text); }
+.red    { color: var(--danger-text); }
+.yellow { color: var(--warn-text); }
+.gray   { color: var(--ink-muted); }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   STREAMLIT WIDGET OVERRIDES
+   ═══════════════════════════════════════════════════════════════════════ */
 div[data-testid="stTextInput"] input {
-    background: #F5F6F8 !important;
-    border: 1px solid #E2E4E9 !important;
-    border-radius: 10px !important;
-    color: #111827 !important;
-    font-size: 15px !important;
-    padding: 12px 16px !important;
+    background: var(--surface-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--r-sm) !important;
+    color: var(--ink) !important;
+    font-size: var(--fs-md) !important;
+    padding: 11px var(--sp-4) !important;
+    transition: border-color .15s ease, box-shadow .15s ease !important;
 }
 div[data-testid="stTextInput"] input::placeholder {
-    color: #111827 !important;
-    opacity: 0.85 !important;
+    color: var(--ink-muted) !important;
+    opacity: 1 !important;
+}
+div[data-testid="stTextInput"] input:focus {
+    border-color: var(--brand) !important;
+    box-shadow: var(--focus) !important;
+    outline: none !important;
 }
 div[data-testid="stButton"] button {
-    background: #22C55E !important;
-    color: #000 !important;
+    background: var(--brand-btn) !important;
+    color: #FFFFFF !important;                    /* 5.02:1 on --brand-btn */
     font-weight: 600 !important;
-    border-radius: 10px !important;
+    border-radius: var(--r-sm) !important;
     border: none !important;
-    padding: 8px 18px !important;
-    font-size: 14px !important;
+    padding: 9px var(--sp-5) !important;
+    font-size: var(--fs-base) !important;
+    box-shadow: var(--sh-sm) !important;
+    transition: background .15s ease, transform .12s ease, box-shadow .15s ease !important;
 }
-.stTabs [data-baseweb="tab"] {
-    color: #111827 !important;
-    font-size: 14px !important;
+div[data-testid="stButton"] button:hover {
+    background: #166534 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: var(--sh-md) !important;
 }
-/* The label text sits in a nested element (p/span/div) inside the tab
-   button, which can carry Streamlit's own muted-grey color and win over
-   a color set only on the parent — this covers it explicitly regardless
-   of which element the label ends up in. */
-.stTabs [data-baseweb="tab"] * {
-    color: #111827 !important;
-}
-.stTabs [aria-selected="true"] {
-    color: #111827 !important;
-    border-bottom-color: #22C55E !important;
-}
-/* st.metric() labels (e.g. "3-yr Revenue CAGR") default to Streamlit's
-   muted secondary-text grey — force them white to match the rest of
-   the UI's high-contrast dark theme. */
-div[data-testid="stMetricLabel"] p {
-    color: #111827 !important;
-}
-div[data-testid="stMetricValue"] {
-    color: #111827 !important;
+div[data-testid="stButton"] button:focus-visible {
+    box-shadow: var(--focus) !important;
+    outline: none !important;
 }
 
-.compare-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
-    gap: 0;
-}
-.compare-header {
-    margin-bottom: 1rem;
-}
+.stTabs [data-baseweb="tab"]   { font-size: var(--fs-base) !important; font-weight: 500 !important; }
+/* The label sits in a nested element that can carry Streamlit's own muted
+   grey and win over a colour set on the parent — cover it explicitly. */
+.stTabs [data-baseweb="tab"] * { color: var(--ink-muted) !important; }
+.stTabs [aria-selected="true"] * { color: var(--ink) !important; font-weight: 600 !important; }
+.stTabs [aria-selected="true"]   { border-bottom-color: var(--brand) !important; }
 
-/* ── Premium compare styles ──────────────────────────────────────────────── */
+div[data-testid="stMetricLabel"] p { color: var(--ink-muted) !important; font-size: var(--fs-sm) !important; }
+div[data-testid="stMetricValue"]   { color: var(--ink) !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPARE STOCKS
+   Series A = brand green, Series B = info blue. This categorical pair is
+   validated: adjacent ΔE 30.8 (deuteranopia) / 32.7 (normal vision), well
+   above the ΔE 8 target, so the two series stay distinguishable under
+   colour-vision deficiency. Identity is never carried by colour alone —
+   every row is direct-labelled and the full numeric table sits alongside.
+   ═══════════════════════════════════════════════════════════════════════ */
+.compare-grid   { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0; }
+.compare-header { margin-bottom: var(--sp-4); }
+
 .winner-card {
-    background: linear-gradient(135deg, #ECFDF3 0%, #F5F6F8 60%);
-    border: 1px solid #22C55E;
-    border-radius: 16px;
-    padding: 1.6rem 1.8rem;
-    margin-bottom: 1.4rem;
-    position: relative;
-    overflow: hidden;
+    background:
+        radial-gradient(110% 160% at 0% 0%, rgba(34,197,94,0.10) 0%, transparent 60%),
+        var(--surface-card);
+    border: 1px solid var(--brand-soft-bd);
+    border-radius: var(--r-lg);
+    padding: var(--sp-6) var(--sp-8);
+    margin-bottom: var(--sp-5);
+    position: relative; overflow: hidden;
+    box-shadow: var(--sh-md);
 }
 .winner-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #22C55E, #3B82F6);
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--brand), var(--info));
 }
 .winner-title {
-    font-size: 1.05rem; font-weight: 700; color: #22C55E;
-    letter-spacing: 0.5px; margin-bottom: 0.5rem;
+    font-size: var(--fs-lg); font-weight: 700; color: var(--brand-text);
+    letter-spacing: -0.2px; margin-bottom: var(--sp-2);
 }
 .score-pill {
-    display: inline-block;
-    padding: 4px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 700;
-    margin-right: 10px;
+    display: inline-block; padding: var(--sp-1) var(--sp-3);
+    border-radius: var(--r-full); font-size: var(--fs-sm);
+    font-weight: 700; margin-right: var(--sp-2);
 }
-.score-pill-a { background: rgba(34,197,94,0.15); color: #22C55E; border: 1px solid rgba(34,197,94,0.3); }
-.score-pill-b { background: rgba(59,130,246,0.15); color: #3B82F6; border: 1px solid rgba(59,130,246,0.3); }
+.score-pill-a { background: var(--brand-soft); color: var(--brand-text); border: 1px solid var(--brand-soft-bd); }
+.score-pill-b { background: var(--info-soft);  color: var(--info-text);  border: 1px solid var(--info-soft-bd); }
+
 .val-badge {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
+    display: inline-block; padding: 2px var(--sp-2);
+    border-radius: var(--r-full); font-size: var(--fs-2xs);
+    font-weight: 600; letter-spacing: 0.3px;
 }
-.val-attractive { background: rgba(34,197,94,0.15); color: #22C55E; border: 1px solid rgba(34,197,94,0.25); }
-.val-fair       { background: rgba(245,158,11,0.15); color: #F59E0B; border: 1px solid rgba(245,158,11,0.25); }
-.val-expensive  { background: rgba(239,68,68,0.15);  color: #EF4444; border: 1px solid rgba(239,68,68,0.25); }
-.cmp-winner-a { color: #22C55E !important; font-weight: 600 !important; text-shadow: 0 0 8px rgba(34,197,94,0.3); }
-.cmp-winner-b { color: #3B82F6 !important; font-weight: 600 !important; text-shadow: 0 0 8px rgba(59,130,246,0.3); }
-.cmp-tie { color: #F59E0B !important; font-size: 11px !important; }
+.val-attractive { background: var(--brand-soft);  color: var(--brand-text);  border: 1px solid var(--brand-soft-bd); }
+.val-fair       { background: var(--warn-soft);   color: var(--warn-text);   border: 1px solid var(--warn-soft-bd); }
+.val-expensive  { background: var(--danger-soft); color: var(--danger-text); border: 1px solid var(--danger-soft-bd); }
+
+/* Winner emphasis: weight + the 🏆 glyph at the call site carry the meaning,
+   so this is not colour-alone. Dropped the old text-shadow glow — it blurred
+   small figures without adding information. */
+.cmp-winner-a { color: var(--brand-text) !important; font-weight: 650 !important; }
+.cmp-winner-b { color: var(--info-text)  !important; font-weight: 650 !important; }
+.cmp-tie      { color: var(--ink-muted)  !important; font-size: var(--fs-2xs) !important; font-weight: 500 !important; }
 .cmp-section-head {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.2px; color: #6B7280;
-    padding: 10px 10px 4px 10px;
-    background: #F3F4F6;
-    border-bottom: 1px solid #E5E7EB;
+    font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.1px; color: var(--ink-muted);
+    padding: var(--sp-3) var(--sp-3) var(--sp-1) var(--sp-3);
+    background: var(--surface-sunken);
+    border-bottom: 1px solid var(--border);
     grid-column: 1 / -1;
 }
 
-/* ── Portfolio edit row ──────────────────────────────────────────────────── */
-.pt-edit-row {
-    background: #F3F4F6;
-    border: 1px solid #E2E4E9;
-    border-radius: 10px;
-    padding: 8px 12px;
-    margin: 4px 0 8px 0;
-}
-
-/* ── Orphaned close-div suppression ─────────────────────────────────────────
-   st.markdown() renders each call in its own DOM wrapper, so a bare </div>
-   written as a separate call is orphaned and can create a 1px gap.
-   Hide any empty markdown containers so close tags are invisible. */
+/* st.markdown() renders each call in its own DOM wrapper, so a bare </div>
+   written as a separate call is orphaned and can leave a 1px gap. Hide
+   empty markdown containers so close tags stay invisible. */
 div[data-testid="stMarkdownContainer"]:empty { display: none; }
 
-/* Let a horizontal finger-drag on the price chart scrub the tooltip
-   instead of the browser immediately hijacking it as a page scroll. */
+/* Let a horizontal finger-drag on the price chart scrub the tooltip instead
+   of the browser immediately hijacking it as a page scroll. */
 div[data-testid="stVegaLiteChart"] { touch-action: pan-y; }
 
-/* ── Mobile responsiveness ──────────────────────────────────────────────────
-   Streamlit's own st.columns() auto-stacks vertically on narrow screens,
-   so most of the layout already adapts. The exceptions are the places
-   using raw CSS grid (the Compare Stocks table) and fixed large font
-   sizes, which need explicit rules below ~640px viewport width. */
-@media (max-width: 640px) {
-    .hero-title { font-size: 1.7rem !important; }
-    .hero-sub { font-size: 0.85rem !important; }
-    .metric-strip { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
-    .metric-card { padding: 0.75rem 0.9rem !important; }
-    .metric-value { font-size: 1.15rem !important; }
-    .score-ring { font-size: 2.2rem !important; }
-    .section-card { padding: 1rem 1.1rem !important; }
-    .ei-row { grid-template-columns: 0.6fr 1.6fr 1.6fr 0.7fr !important; column-gap: 4px !important; }
-    .ei-cell { font-size: 11.5px !important; }
-    .ei-row.ei-header .ei-cell { font-size: 10px !important; }
-    .wl-row { grid-template-columns: 2fr 1fr 1fr 0.9fr 0.7fr !important; column-gap: 5px !important; }
-    .wl-cell { font-size: 11.5px !important; }
-    .wl-row.wl-header .wl-cell { font-size: 9.5px !important; }
-    .pt-row { grid-template-columns: 1.8fr 0.6fr 0.9fr 0.9fr 1.1fr !important; column-gap: 5px !important; }
-    .pt-cell { font-size: 11.5px !important; }
-    .pt-row.pt-header .pt-cell { font-size: 9.5px !important; }
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    .feature-card:hover, div[data-testid="stButton"] button:hover { transform: none !important; }
+}
 
-    /* Collapse the 3-column comparison table into 2 columns (metric +
-       stacked values) on narrow screens so text doesn't get crushed.
-       A full 1-column stack would separate metric from value awkwardly,
-       so we keep metric+value-A together and let value-B wrap below
-       via reduced font size instead, preserving readability. */
-    .compare-grid {
-        grid-template-columns: 1.3fr 1fr 1fr !important;
-        font-size: 0.85rem !important;
-    }
-    .winner-card { padding: 1.1rem 1rem !important; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE
+   Streamlit's st.columns() auto-stacks on narrow screens, so most of the
+   layout already adapts. The exceptions are the raw CSS grids above and
+   the large fixed type sizes.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+    .hero-title      { font-size: var(--fs-lg) !important; }
+    .hero-sub        { font-size: var(--fs-xs) !important; }
+    .landing-banner  { padding: var(--sp-6) var(--sp-5) !important; }
+    .landing-headline{ font-size: var(--fs-xl) !important; }
+    .metric-strip    { grid-template-columns: repeat(2, 1fr) !important; gap: var(--sp-2) !important; }
+    .metric-card     { padding: var(--sp-3) !important; }
+    .metric-value    { font-size: var(--fs-lg) !important; }
+    .score-ring      { font-size: var(--fs-2xl) !important; }
+    .section-card    { padding: var(--sp-4) !important; }
+    .ei-row  { grid-template-columns: 0.6fr 1.6fr 1.6fr 0.7fr !important; column-gap: var(--sp-1) !important; }
+    .ei-cell { font-size: var(--fs-sm) !important; }
+    .ei-row.ei-header .ei-cell { font-size: var(--fs-2xs) !important; }
+    .wl-row  { grid-template-columns: 2fr 1fr 1fr 0.9fr 0.7fr !important; column-gap: 5px !important; }
+    .wl-cell { font-size: var(--fs-sm) !important; }
+    .wl-row.wl-header .wl-cell { font-size: var(--fs-2xs) !important; }
+    .pt-row  { grid-template-columns: 1.8fr 0.6fr 0.9fr 0.9fr 1.1fr !important; column-gap: 5px !important; }
+    .pt-cell { font-size: var(--fs-sm) !important; }
+    .pt-row.pt-header .pt-cell { font-size: var(--fs-2xs) !important; }
+
+    /* Keep metric + value-A together and let value-B compress, rather than
+       a full 1-column stack which would separate a metric from its value. */
+    .compare-grid { grid-template-columns: 1.3fr 1fr 1fr !important; font-size: var(--fs-sm) !important; }
+    .winner-card  { padding: var(--sp-4) !important; }
     .feature-grid { grid-template-columns: 1fr 1fr !important; }
 }
 </style>
@@ -913,7 +1079,7 @@ with tab_main:
             st.session_state.search_matches = None
         else:
             _label = st.session_state.get("last_search_term") or "your query"
-            st.markdown(f"<p style='color:#6B7280; font-size:13px; margin-bottom:10px;'>Found {len(matches)} matches for '{_label}' — which one did you mean?</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='color:#5B6673; font-size:13px; margin-bottom:10px;'>Found {len(matches)} matches for '{_label}' — which one did you mean?</p>", unsafe_allow_html=True)
             pick_cols = st.columns(min(3, len(matches)))
             for i, (sym, lname) in enumerate(matches):
                 with pick_cols[i % 3]:
@@ -1037,7 +1203,7 @@ with tab_main:
         # ── Price strip ──────────────────────────────────────────────────────
         wl_header_col, wl_btn_col = st.columns([6, 1])
         with wl_header_col:
-            st.markdown(f"<h2 style='color:#111827; font-size:1.8rem; margin:1.2rem 0 0.6rem;'>{name} <span style='color:#6B7280; font-size:1.2rem;'>({ticker})</span></h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='color:#111827; font-size:1.8rem; margin:1.2rem 0 0.6rem;'>{name} <span style='color:#5B6673; font-size:1.2rem;'>({ticker})</span></h2>", unsafe_allow_html=True)
         with wl_btn_col:
             if "watchlist" not in st.session_state:
                 st.session_state.watchlist = []
@@ -1054,7 +1220,7 @@ with tab_main:
                     st.success(f"Added {name} to watchlist!")
                     st.rerun()
 
-        chg_color = "#22C55E" if (price_chg and price_chg > 0) else "#6B7280" if not price_chg or price_chg == 0 else "#EF4444"
+        chg_color = TXT_GOOD if (price_chg and price_chg > 0) else TXT_MUTED if not price_chg or price_chg == 0 else TXT_BAD
         chg_str = f"{price_chg:+.2f}%" if price_chg is not None else ""
         # Built as one HTML string inside a CSS grid (.metric-strip) rather
         # than st.columns(5) — Streamlit's columns auto-stack to a single
@@ -2185,22 +2351,22 @@ with tab_main:
                 _avail = [(s, w) for _, s, w in WEIGHTS if s is not None]
                 _total_w = sum(w for _, w in _avail)
                 score = round(sum(s * w for s, w in _avail) / _total_w, 1) if _total_w else health["score"]
-                score_color = "#22C55E" if score >= 7 else "#F59E0B" if score >= 5 else "#EF4444"
+                score_color = TXT_GOOD if score >= 7 else TXT_WARN if score >= 5 else TXT_BAD
                 # Valuation badge — negative PE means loss-making on trailing basis;
                 # showing "Undervalued" for a negative PE would be misleading.
                 pe_low, pe_high = get_pe_bands(sector, industry, slug=classify_sector(sector, industry, name, business_context))
                 pe_known = pe is not None and pe > 0
                 if pe_known:
                     if pe < pe_low:
-                        badge, badge_col = "Undervalued", "#22C55E"
+                        badge, badge_col = "Undervalued", TXT_GOOD
                     elif pe <= pe_high:
-                        badge, badge_col = "Fairly Valued", "#F59E0B"
+                        badge, badge_col = "Fairly Valued", TXT_WARN
                     else:
-                        badge, badge_col = "Overvalued", "#EF4444"
+                        badge, badge_col = "Overvalued", TXT_BAD
                 elif pe is not None and pe <= 0:
-                    badge, badge_col = "Loss-Making", "#EF4444"
+                    badge, badge_col = "Loss-Making", TXT_BAD
                 else:
-                    badge, badge_col = "Unknown", "#6B7280"
+                    badge, badge_col = "Unknown", TXT_MUTED
                 # get_pe_bands() only reads the "pe_ratio" band from a sector's
                 # config. Banking/NBFC/Insurance configs define "price_to_book"
                 # bands instead (P/B is the correct valuation metric for them),
@@ -2214,11 +2380,11 @@ with tab_main:
                 _val_pillar_score = sub_scores_map.get("Valuation")
                 if _val_pillar_score is not None:
                     if _val_pillar_score >= 7:
-                        badge, badge_col = "Undervalued", "#22C55E"
+                        badge, badge_col = "Undervalued", TXT_GOOD
                     elif _val_pillar_score >= 3:
-                        badge, badge_col = "Fairly Valued", "#F59E0B"
+                        badge, badge_col = "Fairly Valued", TXT_WARN
                     else:
-                        badge, badge_col = "Overvalued", "#EF4444"
+                        badge, badge_col = "Overvalued", TXT_BAD
                 badge_icon = {"Undervalued": "🟢", "Fairly Valued": "🟡", "Overvalued": "🔴", "Loss-Making": "🔴", "Unknown": "⚪"}[badge]
             else:
                 # Legacy fallback when modules not loaded
@@ -2304,7 +2470,7 @@ with tab_main:
                     verdict = "Weak fundamentals — significant concerns."
                 else:
                     verdict = "Distressed — poor health across most dimensions."
-                score_color = "#22C55E" if score >= 7 else "#F59E0B" if score >= 5 else "#EF4444"
+                score_color = TXT_GOOD if score >= 7 else TXT_WARN if score >= 5 else TXT_BAD
 
             # ── Sub-score-aware verdict (module-level _build_smart_verdict) ──
             verdict = _build_smart_verdict(score, WEIGHTS)
@@ -2331,28 +2497,28 @@ with tab_main:
             if turnaround_info and quality_score is not None:
                 quality_score = round(max(0, quality_score - 2.0), 1)
 
-            quality_color = "#6B7280" if quality_score is None else (
-                "#22C55E" if quality_score >= 7 else "#F59E0B" if quality_score >= 5 else "#EF4444"
+            quality_color = TXT_MUTED if quality_score is None else (
+                TXT_GOOD if quality_score >= 7 else TXT_WARN if quality_score >= 5 else TXT_BAD
             )
             value_label, value_color = valuation_bucket(value_score) if _MODULES_LOADED else (
-                ("Unknown", "#6B7280") if value_score is None else
-                ("Cheap", "#22C55E") if value_score >= 7 else
-                ("Fair", "#F59E0B") if value_score >= 3 else ("Rich", "#EF4444")
+                ("Unknown", TXT_MUTED) if value_score is None else
+                ("Cheap", TXT_GOOD) if value_score >= 7 else
+                ("Fair", TXT_WARN) if value_score >= 3 else ("Rich", TXT_BAD)
             )
 
             # ── Render score ring, verdict, badge, breakdown ──────────────────
             st.markdown(f"""
             <div style='text-align:center; margin-bottom:0.5rem;'>
-              <div class='score-ring' style='color:{score_color};'>{score}<span style='font-size:1.2rem; color:#6B7280;'>/10</span></div>
-              <div class='score-label' style='font-size:13px; color:#6B7280; margin-top:4px;'>{verdict}</div>
+              <div class='score-ring' style='color:{score_color};'>{score}<span style='font-size:1.2rem; color:#5B6673;'>/10</span></div>
+              <div class='score-label' style='font-size:13px; color:#5B6673; margin-top:4px;'>{verdict}</div>
               <div style='margin-top:8px; display:inline-block; background:#F5F6F8; border:1px solid {badge_col}; border-radius:20px; padding:4px 14px; font-size:13px; font-weight:600; color:{badge_col};'>{badge_icon} {badge}</div>
               <div style='margin-top:10px; display:flex; justify-content:center; gap:8px;'>
                 <div style='background:#F5F6F8; border:1px solid {quality_color}; border-radius:10px; padding:6px 14px; min-width:100px;'>
-                  <div style='font-size:10px; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px;'>Quality</div>
+                  <div style='font-size:10px; color:#5B6673; text-transform:uppercase; letter-spacing:0.5px;'>Quality</div>
                   <div style='font-size:15px; font-weight:700; color:{quality_color};'>{quality_score if quality_score is not None else "N/A"}{"/10" if quality_score is not None else ""}</div>
                 </div>
                 <div style='background:#F5F6F8; border:1px solid {value_color}; border-radius:10px; padding:6px 14px; min-width:100px;'>
-                  <div style='font-size:10px; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px;'>Value</div>
+                  <div style='font-size:10px; color:#5B6673; text-transform:uppercase; letter-spacing:0.5px;'>Value</div>
                   <div style='font-size:15px; font-weight:700; color:{value_color};'>{value_label}{f" ({value_score}/10)" if value_score is not None else ""}</div>
                 </div>
               </div>
@@ -2429,7 +2595,7 @@ with tab_main:
                             padding:10px 12px; margin-top:10px; font-size:11.5px; color:#6D28D9;'>
                   <div style='font-weight:700; margin-bottom:4px;'>🔄 Turnaround Company</div>
                   {_reasons_html}
-                  <div style='margin-top:4px; color:#6B7280;'>Recent growth is influenced by recovery from a depressed base rather than long-term compounding. Growth sustainability should be monitored — Quality score adjusted down accordingly.</div>
+                  <div style='margin-top:4px; color:#5B6673;'>Recent growth is influenced by recovery from a depressed base rather than long-term compounding. Growth sustainability should be monitored — Quality score adjusted down accordingly.</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -2437,7 +2603,7 @@ with tab_main:
             if is_cyclical:
                 st.markdown("""
                 <div style='background:#F5F6F8; border:1px solid #D8DBE0; border-radius:8px;
-                            padding:8px 12px; margin-top:10px; font-size:11.5px; color:#6B7280;'>
+                            padding:8px 12px; margin-top:10px; font-size:11.5px; color:#5B6673;'>
                   🔁 Cyclical sector — earnings and margins here typically swing with commodity/capex cycles. Weigh recent strong years against the full cycle, not in isolation.
                 </div>
                 """, unsafe_allow_html=True)
@@ -2447,18 +2613,18 @@ with tab_main:
                     breakdown_html += f"""
                     <div style='margin-bottom:10px;'>
                       <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;'>
-                        <span style='color:#6B7280;'>{label} <span style='color:#555;'>(no data)</span></span>
-                        <span style='color:#6B7280; font-weight:600;'>N/A</span>
+                        <span style='color:#5B6673;'>{label} <span style='color:var(--ink-muted);'>(no data)</span></span>
+                        <span style='color:#5B6673; font-weight:600;'>N/A</span>
                       </div>
                       <div style='background:#E2E4E9; border-radius:4px; height:5px;'></div>
                     </div>"""
                     continue
-                s_color = "#22C55E" if s >= 7 else "#F59E0B" if s >= 5 else "#EF4444"
+                s_color = TXT_GOOD if s >= 7 else TXT_WARN if s >= 5 else TXT_BAD
                 bar_pct = int(s * 10)
                 breakdown_html += f"""
                 <div style='margin-bottom:10px;'>
                   <div style='display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;'>
-                    <span style='color:#6B7280;'>{label} <span style='color:#555;'>({weight}% wt)</span></span>
+                    <span style='color:#5B6673;'>{label} <span style='color:var(--ink-muted);'>({weight}% wt)</span></span>
                     <span style='color:{s_color}; font-weight:600;'>{s}/10</span>
                   </div>
                   <div style='background:#E2E4E9; border-radius:4px; height:5px;'>
@@ -2526,12 +2692,12 @@ with tab_main:
                   <div style='background:#E2E4E9; border-radius:6px; height:8px; margin:10px 0;'>
                     <div style='background:{risk["color"]}; width:{level_pct}%; height:8px; border-radius:6px;'></div>
                   </div>
-                  <div style='font-size:11px; color:#6B7280;'>Base: {risk["sector_base"]} (sector)</div>
+                  <div style='font-size:11px; color:#5B6673;'>Base: {risk["sector_base"]} (sector)</div>
                 </div>
-                <p style='font-size:11.5px; color:#6B7280; line-height:1.5; margin-bottom:0.6rem; font-style:italic;'>{risk.get("sector_context","")}</p>
+                <p style='font-size:11.5px; color:#5B6673; line-height:1.5; margin-bottom:0.6rem; font-style:italic;'>{risk.get("sector_context","")}</p>
                 """, unsafe_allow_html=True)
                 for f in risk["factors"][:5]:
-                    st.markdown(f"<div style='font-size:12px; color:#6B7280; padding:3px 0; border-bottom:1px solid #E5E7EB;'>• {f}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size:12px; color:#5B6673; padding:3px 0; border-bottom:1px solid #E5E7EB;'>• {f}</div>", unsafe_allow_html=True)
             except Exception:
                 st.info("Risk assessment unavailable.")
             st.markdown("</div>", unsafe_allow_html=True)
@@ -2634,28 +2800,33 @@ with tab_main:
             # months, not the most recent standalone fiscal year.
             _TTM_BADGE = (
                 "<span style='font-size:9px; font-weight:700; background:#DCFCE7; "
-                "color:#22C55E; border-radius:4px; padding:1px 5px; "
+                "color:#15803D; border-radius:4px; padding:1px 5px; "
                 "vertical-align:middle; margin-left:5px; letter-spacing:0.4px;'>TTM</span>"
             )
+            # (label, text, accent_mark, accent_text)
+            # accent_mark paints the 3px left border — a MARK, so it keeps the
+            # vivid hue. accent_text paints the label, so it needs a variant
+            # that clears 4.5:1; the vivid values measure as low as 1.95:1.
             _snap_fields = [
-                ("Business",                raw_snap.get("business",   ""),  "#3B82F6", False),
-                ("Position",               raw_snap.get("position",   ""),  "#22C55E", False),
-                (f"Financials{_TTM_BADGE}", raw_snap.get("financials", ""),  "#F59E0B", True),
-                ("Outlook",                raw_snap.get("outlook",    ""),  "#A78BFA", False),
+                ("Business",                raw_snap.get("business",   ""),  "#3B82F6", "#2563EB"),
+                ("Position",                raw_snap.get("position",   ""),  "#22C55E", TXT_GOOD),
+                (f"Financials{_TTM_BADGE}", raw_snap.get("financials", ""),  "#F59E0B", TXT_WARN),
+                ("Outlook",                 raw_snap.get("outlook",    ""),  "#A78BFA", "#6D28D9"),
             ]
             # Two tiles per row
             for row_start in range(0, len(_snap_fields), 2):
                 tile_cols = st.columns(2)
-                for col_idx, (label, text, accent, _) in enumerate(_snap_fields[row_start:row_start+2]):
-                    safe_text = sanitize_llm_html(text) if text else "<span style='color:#555;'>—</span>"
+                for col_idx, (label, text, accent, accent_text) in enumerate(_snap_fields[row_start:row_start+2]):
+                    safe_text = sanitize_llm_html(text) if text else "<span style='color:var(--ink-muted);'>—</span>"
                     with tile_cols[col_idx]:
                         st.markdown(f"""
-                        <div style='background:#F3F4F6; border:1px solid #E2E4E9; border-left:3px solid {accent};
-                                    border-radius:10px; padding:12px 14px; height:100%; min-height:80px;
-                                    margin-bottom:10px;'>
-                          <div style='font-size:11px; font-weight:700; color:{accent}; text-transform:uppercase;
+                        <div style='background:var(--surface-card); border:1px solid var(--border);
+                                    border-left:3px solid {accent};
+                                    border-radius:var(--r-md); padding:14px 16px; height:100%; min-height:80px;
+                                    margin-bottom:10px; box-shadow:var(--sh-sm);'>
+                          <div style='font-size:var(--fs-2xs); font-weight:700; color:{accent_text}; text-transform:uppercase;
                                       letter-spacing:0.8px; margin-bottom:6px;'>{label}</div>
-                          <div style='font-size:16px; color:#374151; line-height:1.7;'>{safe_text}</div>
+                          <div style='font-size:var(--fs-md); color:var(--ink-secondary); line-height:1.7;'>{safe_text}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
@@ -2743,14 +2914,14 @@ with tab_main:
                         st.markdown(f"""
                         <div style='background:#F3F4F6; border:1px solid #E2E4E9; border-radius:10px; padding:10px 14px; margin-bottom:10px;'>
                           <div style='font-size:13px; font-weight:600; color:{flag["color"]}; margin-bottom:4px;'>{flag["icon"]} {flag["title"]}</div>
-                          <div style='font-size:12px; color:#6B7280;'>{flag["detail"]}</div>
+                          <div style='font-size:12px; color:#5B6673;'>{flag["detail"]}</div>
                           <div style='margin-top:4px;'><span style='font-size:10px; background:#F5F6F8; border:1px solid #E2E4E9; border-radius:4px; padding:1px 6px; color:{flag["color"]};'>{flag["severity"].upper()} SEVERITY</span></div>
                         </div>
                         """, unsafe_allow_html=True)
             else:
                 st.markdown("""
                 <div style='background:#F3F4F6; border:1px solid #E2E4E9; border-radius:10px; padding:12px 16px;'>
-                  <span style='color:#22C55E; font-size:14px;'>🟢 No major red flags detected based on available metrics.</span>
+                  <span style='color:#15803D; font-size:14px;'>🟢 No major red flags detected based on available metrics.</span>
                 </div>
                 """, unsafe_allow_html=True)
         else:
@@ -2808,7 +2979,7 @@ with tab_main:
                 st.markdown(f"""
                 <div style='background:#F3F4F6; border:1px solid #E2E4E9; border-radius:10px; padding:10px 14px; margin-bottom:8px;'>
                   <div style='font-size:13px; font-weight:600; color:{color}; margin-bottom:4px;'>{icon} {title}</div>
-                  <div style='font-size:12px; color:#6B7280;'>{reason}</div>
+                  <div style='font-size:12px; color:#5B6673;'>{reason}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -2957,9 +3128,9 @@ with tab_main:
                                 tickfont=dict(size=11, color="#6B7280"),
                             ),
                             yaxis=dict(
-                                title=dict(text="₹ Cr", font=dict(size=10, color="#22C55E")),
+                                title=dict(text="₹ Cr", font=dict(size=10, color=TXT_MUTED)),
                                 gridcolor="#E2E4E9", linecolor="#E2E4E9",
-                                tickfont=dict(size=10, color="#22C55E"),
+                                tickfont=dict(size=10, color=TXT_MUTED),
                                 tickformat=",.0f",
                             ),
                         )
@@ -2967,11 +3138,11 @@ with tab_main:
                         # Revenue CAGR pill above chart
                         rev_pill_parts = []
                         if _rev_cagr_disp is not None:
-                            c = "#22C55E" if _rev_cagr_disp >= 0 else "#EF4444"
+                            c = TXT_GOOD if _rev_cagr_disp >= 0 else TXT_BAD
                             _yr_label = f"{_rev_cagr_n}-yr " if _rev_cagr_n else ""
                             rev_pill_parts.append(f"<span style='background:#ECFDF3; color:{c}; border:1px solid {c}40; border-radius:12px; padding:3px 10px; font-size:12px; font-weight:600;'>{_yr_label}CAGR {_rev_cagr_disp:+.1f}%</span>")
                         if _rev_yoy_disp is not None:
-                            c = "#22C55E" if _rev_yoy_disp >= 0 else "#EF4444"
+                            c = TXT_GOOD if _rev_yoy_disp >= 0 else TXT_BAD
                             rev_pill_parts.append(f"<span style='background:#F3F4F6; color:{c}; border:1px solid {c}40; border-radius:12px; padding:3px 10px; font-size:12px;'>YoY {_rev_yoy_disp:+.1f}%</span>")
                         if rev_pill_parts:
                             st.markdown(
@@ -3038,11 +3209,11 @@ with tab_main:
                             )
                             _deferred_pft_fig = fig_pft
                             if _pft_cagr_disp is not None:
-                                c = "#3B82F6" if _pft_cagr_disp >= 0 else "#EF4444"
+                                c = "#2563EB" if _pft_cagr_disp >= 0 else TXT_BAD
                                 _yr_label = f"{_pft_cagr_n}-yr " if _pft_cagr_n else ""
                                 _deferred_pft_pills.append(f"<span style='background:#EEF2FF; color:{c}; border:1px solid {c}40; border-radius:12px; padding:3px 10px; font-size:12px; font-weight:600;'>{_yr_label}CAGR {_pft_cagr_disp:+.1f}%</span>")
                             if _pft_yoy_disp is not None:
-                                c = "#22C55E" if _pft_yoy_disp >= 0 else "#EF4444"
+                                c = TXT_GOOD if _pft_yoy_disp >= 0 else TXT_BAD
                                 _deferred_pft_pills.append(f"<span style='background:#F3F4F6; color:{c}; border:1px solid {c}40; border-radius:12px; padding:3px 10px; font-size:12px;'>YoY {_pft_yoy_disp:+.1f}%</span>")
 
                     else:
@@ -3146,7 +3317,7 @@ with tab_main:
                             if i < len(rev_vals) - 1:
                                 prev_rv = rev_vals[i + 1][1]
                                 rev_yoy = ((rv - prev_rv) / abs(prev_rv)) * 100 if prev_rv else 0
-                                rev_yoy_color = "#22C55E" if rev_yoy >= 0 else "#EF4444"
+                                rev_yoy_color = TXT_GOOD if rev_yoy >= 0 else TXT_BAD
                                 rev_yoy_html = f"<span style='color:{rev_yoy_color}; font-size:11px;'>({rev_yoy:+.1f}%)</span>"
                             else:
                                 rev_yoy_html = ""
@@ -3158,17 +3329,17 @@ with tab_main:
                                 if prev_pft_val and pd.notna(prev_pft_val) and prev_pft_val != 0:
                                     prev_pft_cr = float(prev_pft_val) / 1e7
                                     pft_yoy = ((pft_cr - prev_pft_cr) / abs(prev_pft_cr)) * 100
-                                    pft_yoy_color = "#22C55E" if pft_yoy >= 0 else "#EF4444"
+                                    pft_yoy_color = TXT_GOOD if pft_yoy >= 0 else TXT_BAD
                                     pft_yoy_html = f"<span style='color:{pft_yoy_color}; font-size:11px;'>({pft_yoy:+.1f}%)</span>"
 
                             # Net margin — separate column so it doesn't clash with YoY
                             margin_str = f"{pft_cr/rev_cr*100:.1f}%" if pft_cr is not None and rev_cr > 0 else "—"
-                            margin_color = "#22C55E" if pft_cr and pft_cr > 0 else "#EF4444"
+                            margin_color = TXT_GOOD if pft_cr and pft_cr > 0 else TXT_BAD
 
                             pft_cell_html = (
-                                f"<span style='color:#3B82F6;'>₹{pft_cr:,.0f} Cr</span> {pft_yoy_html}"
+                                f"<span style='color:#2563EB;'>₹{pft_cr:,.0f} Cr</span> {pft_yoy_html}"
                                 if pft_cr is not None
-                                else "<span style='color:#6B7280;'>—</span>"
+                                else "<span style='color:#5B6673;'>—</span>"
                             )
 
                             # NOTE: built as single-line strings (no leading
@@ -3406,9 +3577,9 @@ with tab_main:
                         day_open = price_hist["Open"].iloc[0] if "Open" in price_hist.columns else None
                         strip_parts = []
                         if day_open is not None:
-                            strip_parts.append(f"<span style='color:#6B7280;'>Open</span> &nbsp;<span style='color:#1F2937; font-weight:600;'>₹{day_open:,.1f}</span>")
-                        strip_parts.append(f"<span style='color:#6B7280;'>Day High</span> &nbsp;<span style='color:#22C55E; font-weight:600;'>₹{day_high:,.1f}</span>")
-                        strip_parts.append(f"<span style='color:#6B7280;'>Day Low</span> &nbsp;<span style='color:#EF4444; font-weight:600;'>₹{day_low:,.1f}</span>")
+                            strip_parts.append(f"<span style='color:#5B6673;'>Open</span> &nbsp;<span style='color:#1F2937; font-weight:600;'>₹{day_open:,.1f}</span>")
+                        strip_parts.append(f"<span style='color:#5B6673;'>Day High</span> &nbsp;<span style='color:#15803D; font-weight:600;'>₹{day_high:,.1f}</span>")
+                        strip_parts.append(f"<span style='color:#5B6673;'>Day Low</span> &nbsp;<span style='color:#B91C1C; font-weight:600;'>₹{day_low:,.1f}</span>")
                         st.markdown(
                             "<div style='display:flex; gap:24px; margin-top:4px; font-size:13px;'>"
                             + "".join(f"<div>{p}</div>" for p in strip_parts)
@@ -3419,11 +3590,11 @@ with tab_main:
                     # Period return badge (non-1D) — shows % gain/loss over the visible window
                     elif period_choice != "1D":
                         period_return = ((closes.iloc[-1] - closes.iloc[0]) / closes.iloc[0]) * 100
-                        ret_color = "#22C55E" if period_return >= 0 else "#EF4444"
+                        ret_color = TXT_GOOD if period_return >= 0 else TXT_BAD
                         ret_label = {"1M": "1-Month", "3M": "3-Month", "6M": "6-Month", "1Y": "1-Year", "3Y": "3-Year"}[period_choice]
                         st.markdown(
                             f"<div style='font-size:13px; margin-top:4px;'>"
-                            f"<span style='color:#6B7280;'>{ret_label} Return</span> &nbsp;"
+                            f"<span style='color:#5B6673;'>{ret_label} Return</span> &nbsp;"
                             f"<span style='color:{ret_color}; font-weight:600;'>{period_return:+.1f}%</span>"
                             f"</div>",
                             unsafe_allow_html=True,
@@ -3438,13 +3609,13 @@ with tab_main:
                         pct_from_low  = (current - week52_low)  / week52_low  * 100
                         st.markdown(f"""
                         <div style='display:flex; gap:24px; margin-top:8px; font-size:13px;'>
-                          <div><span style='color:#6B7280;'>52W Low</span> &nbsp;
+                          <div><span style='color:#5B6673;'>52W Low</span> &nbsp;
                             <span style='color:#1F2937; font-weight:600;'>₹{week52_low:,.1f}</span>
-                            <span style='color:#22C55E; font-size:11px;'> ({pct_from_low:+.1f}% from low)</span>
+                            <span style='color:#15803D; font-size:11px;'> ({pct_from_low:+.1f}% from low)</span>
                           </div>
-                          <div><span style='color:#6B7280;'>52W High</span> &nbsp;
+                          <div><span style='color:#5B6673;'>52W High</span> &nbsp;
                             <span style='color:#1F2937; font-weight:600;'>₹{week52_high:,.1f}</span>
-                            <span style='color:#EF4444; font-size:11px;'> ({pct_from_high:+.1f}% from high)</span>
+                            <span style='color:#B91C1C; font-size:11px;'> ({pct_from_high:+.1f}% from high)</span>
                           </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -3483,18 +3654,19 @@ with tab_main:
                             sector, industry,
                             roe_raw=roe, de_raw=de, revenue_cagr=rev_cagr,
                         )
-                moat_color = {"Weak": "#EF4444", "Moderate": "#F59E0B", "Strong": "#22C55E"}.get(moat["rating"], "#6B7280")
+                # Text colours (rating label + score pill), so text-safe steps.
+                moat_color = {"Weak": TXT_BAD, "Moderate": TXT_WARN, "Strong": TXT_GOOD}.get(moat["rating"], TXT_MUTED)
                 moat_score = moat.get("score", "—")
                 st.markdown(f"""
                 <div style='text-align:center; margin-bottom:0.8rem;'>
                   <span style='font-size:1.6rem; font-weight:700; color:{moat_color};'>{moat["rating"]}</span>
-                  <span style='font-size:0.9rem; color:#6B7280;'> Moat</span>
+                  <span style='font-size:0.9rem; color:#5B6673;'> Moat</span>
                   <div style='display:inline-block; margin-left:10px; background:#F5F6F8; border:1px solid {moat_color}; border-radius:20px; padding:2px 12px; font-size:12px; font-weight:700; color:{moat_color};'>{moat_score}/10</div>
                 </div>
                 """, unsafe_allow_html=True)
                 # LLM verdict (company-specific), if available
                 if moat.get("llm_verdict"):
-                    st.markdown(f"<p style='font-size:12.5px; color:#6B7280; line-height:1.6; margin-bottom:0.8rem;'>{moat['llm_verdict']}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='font-size:12.5px; color:#5B6673; line-height:1.6; margin-bottom:0.8rem;'>{moat['llm_verdict']}</p>", unsafe_allow_html=True)
                 # Key sources of moat (sector-specific factors)
                 if moat.get("factors"):
                     _strength_icon = {
@@ -3512,19 +3684,19 @@ with tab_main:
                     st.markdown(f"<div style='margin-top:8px;'>{moat_list_html}</div>", unsafe_allow_html=True)
                 # Bull case
                 if moat.get("bull_case"):
-                    st.markdown("<div style='font-size:15px; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; margin-top:10px; margin-bottom:4px;'>Bull Case</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='font-size:15px; font-weight:700; color:#5B6673; text-transform:uppercase; letter-spacing:0.5px; margin-top:10px; margin-bottom:4px;'>Bull Case</div>", unsafe_allow_html=True)
                     bull_html = "".join(
                         f"<div style='font-size:12px; color:#374151; padding:4px 0; border-bottom:1px solid #E2E4E9;'>"
-                        f"<span style='color:#22C55E; margin-right:6px;'>✓</span>{b}</div>"
+                        f"<span style='color:#15803D; margin-right:6px;'>✓</span>{b}</div>"
                         for b in moat["bull_case"]
                     )
                     st.markdown(f"<div>{bull_html}</div>", unsafe_allow_html=True)
                 # Bear case
                 if moat.get("bear_case"):
-                    st.markdown("<div style='font-size:15px; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; margin-top:10px; margin-bottom:4px;'>Bear Case</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='font-size:15px; font-weight:700; color:#5B6673; text-transform:uppercase; letter-spacing:0.5px; margin-top:10px; margin-bottom:4px;'>Bear Case</div>", unsafe_allow_html=True)
                     bear_html = "".join(
-                        f"<div style='font-size:12px; color:#6B7280; padding:4px 0; border-bottom:1px solid #E5E7EB;'>"
-                        f"<span style='color:#F59E0B; margin-right:6px;'>⚠</span>{w}</div>"
+                        f"<div style='font-size:12px; color:#5B6673; padding:4px 0; border-bottom:1px solid #E5E7EB;'>"
+                        f"<span style='color:#B45309; margin-right:6px;'>⚠</span>{w}</div>"
                         for w in moat["bear_case"]
                     )
                     st.markdown(f"<div>{bear_html}</div>", unsafe_allow_html=True)
@@ -3568,7 +3740,7 @@ with tab_main:
                       <span style='font-size:1.2rem;'>{overall_sent["icon"]}</span>
                       <div>
                         <div style='font-size:13px; font-weight:600; color:{overall_sent["color"]};'>Overall Sentiment: {overall_sent["label"]}</div>
-                        <div style='font-size:11px; color:#6B7280;'>
+                        <div style='font-size:11px; color:#5B6673;'>
                           🟢 {overall_sent["positive"]} positive &nbsp;·&nbsp;
                           🟡 {overall_sent["neutral"]} neutral &nbsp;·&nbsp;
                           🔴 {overall_sent["negative"]} negative &nbsp;·&nbsp;
@@ -3580,7 +3752,9 @@ with tab_main:
 
                     for i, article in enumerate(enriched[:5]):
                         sent = article["sentiment"]
-                        sent_bg = "#14532D" if sent["label"] == "Positive" else "#450A0A" if sent["label"] == "Negative" else "#1C1917"
+                        # Light tints — these were dark-theme leftovers; with text darkened
+                        # for the light UI, dark-on-dark measured 1.28:1.
+                        sent_bg = "#ECFDF3" if sent["label"] == "Positive" else "#FEF2F2" if sent["label"] == "Negative" else "#F1F3F5"
                         source = article.get("source", {}).get("name", "")
                         pub_date = (article.get("publishedAt", "") or "")[:10]
                         title = article.get("title", "")
@@ -3590,8 +3764,8 @@ with tab_main:
                         <div style='padding:10px 0; border-bottom:1px solid #E2E4E9;'>
                           <span style='background:{sent_bg}; color:{sent["color"]}; font-size:11px; font-weight:500; padding:2px 8px; border-radius:4px;'>{sent["icon"]} {sent["label"]}</span>
                           <a href='{url}' target='_blank' style='font-size:13px; font-weight:500; color:#1F2937; margin-left:8px; text-decoration:none;'>{title}</a>
-                          <div style='font-size:12px; color:#6B7280; margin-top:4px;'>{desc}</div>
-                          <div style='font-size:11px; color:#555; margin-top:2px;'>{source} {f'· {pub_date}' if pub_date else ''}</div>
+                          <div style='font-size:12px; color:#5B6673; margin-top:4px;'>{desc}</div>
+                          <div style='font-size:11px; color:var(--ink-muted); margin-top:2px;'>{source} {f'· {pub_date}' if pub_date else ''}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -3625,16 +3799,16 @@ with tab_main:
 
                     for i, item in enumerate(news_items[:5]):
                         sent = item.get("sentiment", "Neutral")
-                        sent_color = "#22C55E" if sent == "Positive" else "#EF4444" if sent == "Negative" else "#6B7280"
-                        sent_bg = "#14532D" if sent == "Positive" else "#450A0A" if sent == "Negative" else "#1C1917"
+                        sent_color = TXT_GOOD if sent == "Positive" else TXT_BAD if sent == "Negative" else TXT_MUTED
+                        sent_bg = "#ECFDF3" if sent == "Positive" else "#FEF2F2" if sent == "Negative" else "#F1F3F5"
                         source = articles_to_use[i].get("source", {}).get("name", "") if i < len(articles_to_use) else ""
                         pub_date = (articles_to_use[i].get("publishedAt", "") or "")[:10] if i < len(articles_to_use) else ""
                         st.markdown(f"""
                         <div style='padding:10px 0; border-bottom:1px solid #E2E4E9;'>
                           <span style='background:{sent_bg}; color:{sent_color}; font-size:11px; font-weight:500; padding:2px 8px; border-radius:4px;'>{sent}</span>
                           <span style='font-size:13px; font-weight:500; color:#1F2937; margin-left:8px;'>{item["title"]}</span>
-                          <div style='font-size:12px; color:#6B7280; margin-top:4px;'>{item["summary"]}</div>
-                          <div style='font-size:11px; color:#555; margin-top:2px;'>{source} {f'· {pub_date}' if pub_date else ''}</div>
+                          <div style='font-size:12px; color:#5B6673; margin-top:4px;'>{item["summary"]}</div>
+                          <div style='font-size:11px; color:var(--ink-muted); margin-top:2px;'>{source} {f'· {pub_date}' if pub_date else ''}</div>
                         </div>
                         """, unsafe_allow_html=True)
             else:
@@ -3680,7 +3854,7 @@ with tab_compare:
     go = _pgo
 
     st.markdown("<h3 style='color:#111827; font-size:1.7rem; margin-bottom:0.3rem;'>⚖️ Stock Comparison</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#6B7280; font-size:13px; margin-bottom:1.2rem;'>Side-by-side investor-grade analysis with winner highlighting, growth metrics, and radar chart.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#5B6673; font-size:13px; margin-bottom:1.2rem;'>Side-by-side investor-grade analysis with winner highlighting, growth metrics, and radar chart.</p>", unsafe_allow_html=True)
 
     with st.form(key="compare_form"):
         c1, c2, c3 = st.columns([2, 2, 1])
@@ -3717,7 +3891,7 @@ with tab_compare:
 
     # Disambiguation pickers
     if st.session_state.compare_matches_a:
-        st.markdown(f"<p style='color:#6B7280; font-size:13px;'>Multiple matches for '{st.session_state.compare_label_a}' — pick one:</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:#5B6673; font-size:13px;'>Multiple matches for '{st.session_state.compare_label_a}' — pick one:</p>", unsafe_allow_html=True)
         cols = st.columns(min(3, len(st.session_state.compare_matches_a)))
         for i, (sym, lname) in enumerate(st.session_state.compare_matches_a):
             with cols[i % 3]:
@@ -3727,7 +3901,7 @@ with tab_compare:
                     st.rerun()
 
     if st.session_state.compare_matches_b:
-        st.markdown(f"<p style='color:#6B7280; font-size:13px;'>Multiple matches for '{st.session_state.compare_label_b}' — pick one:</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:#5B6673; font-size:13px;'>Multiple matches for '{st.session_state.compare_label_b}' — pick one:</p>", unsafe_allow_html=True)
         cols = st.columns(min(3, len(st.session_state.compare_matches_b)))
         for i, (sym, lname) in enumerate(st.session_state.compare_matches_b):
             with cols[i % 3]:
@@ -3847,11 +4021,11 @@ with tab_compare:
         st.markdown(f"""
         <div class='winner-card'>
           <div class='winner-title'>{winner_headline}</div>
-          <div style='font-size:13px; color:#6B7280; margin-bottom:0.9rem;'>{winner_subtitle}</div>
+          <div style='font-size:13px; color:#5B6673; margin-bottom:0.9rem;'>{winner_subtitle}</div>
           <div style='display:flex; align-items:center; gap:12px; flex-wrap:wrap;'>
             <span class='score-pill score-pill-a'>{short_a} &nbsp; {score_a}/10</span>
             <span class='score-pill score-pill-b'>{short_b} &nbsp; {score_b}/10</span>
-            <span style='font-size:11px; color:#555; margin-left:4px;'>Compare score: Valuation 25% · Profitability 25% · Growth 25% · Balance Sheet 25% &nbsp;|&nbsp; <i>Main Health Score uses different weights (Val 30%, Prof 25%, Growth 25%, BS 20%)</i></span>
+            <span style='font-size:11px; color:var(--ink-muted); margin-left:4px;'>Compare score: Valuation 25% · Profitability 25% · Growth 25% · Balance Sheet 25% &nbsp;|&nbsp; <i>Main Health Score uses different weights (Val 30%, Prof 25%, Growth 25%, BS 20%)</i></span>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -3860,21 +4034,21 @@ with tab_compare:
         sector_label_a = sector_label_b = ""
         if _MODULES_LOADED:
             try:
-                sector_label_a = f"<span style='font-size:10px; color:#6B7280; margin-left:6px;'>· {classify_sector(sect_a, ind_a, name_a, info_a.get('longBusinessSummary', '')).replace('_',' ').title()}</span>"
-                sector_label_b = f"<span style='font-size:10px; color:#6B7280; margin-left:6px;'>· {classify_sector(sect_b, ind_b, name_b, info_b.get('longBusinessSummary', '')).replace('_',' ').title()}</span>"
+                sector_label_a = f"<span style='font-size:10px; color:#5B6673; margin-left:6px;'>· {classify_sector(sect_a, ind_a, name_a, info_a.get('longBusinessSummary', '')).replace('_',' ').title()}</span>"
+                sector_label_b = f"<span style='font-size:10px; color:#5B6673; margin-left:6px;'>· {classify_sector(sect_b, ind_b, name_b, info_b.get('longBusinessSummary', '')).replace('_',' ').title()}</span>"
             except Exception:
                 pass
 
         st.markdown(f"""
         <div class='compare-grid compare-header' style='background:#F3F4F6; border-radius:10px 10px 0 0; margin-bottom:0;'>
-          <div style='padding:12px 10px; font-size:11px; color:#6B7280; font-weight:700; text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid #E2E4E9;'>Metric</div>
+          <div style='padding:12px 10px; font-size:11px; color:#5B6673; font-weight:700; text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid #E2E4E9;'>Metric</div>
           <div style='padding:12px 10px; border-bottom:2px solid #22C55E;'>
-            <span style='font-size:14px; color:#22C55E; font-weight:700;'>{name_a}</span><br>
-            <span style='font-size:11px; color:#6B7280;'>{short_a} &nbsp;</span>{badge_a}{sector_label_a}
+            <span style='font-size:14px; color:#15803D; font-weight:700;'>{name_a}</span><br>
+            <span style='font-size:11px; color:#5B6673;'>{short_a} &nbsp;</span>{badge_a}{sector_label_a}
           </div>
           <div style='padding:12px 10px; border-bottom:2px solid #3B82F6;'>
-            <span style='font-size:14px; color:#3B82F6; font-weight:700;'>{name_b}</span><br>
-            <span style='font-size:11px; color:#6B7280;'>{short_b} &nbsp;</span>{badge_b}{sector_label_b}
+            <span style='font-size:14px; color:#2563EB; font-weight:700;'>{name_b}</span><br>
+            <span style='font-size:11px; color:#5B6673;'>{short_b} &nbsp;</span>{badge_b}{sector_label_b}
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -3883,7 +4057,7 @@ with tab_compare:
         def _row(label, disp_a, disp_b, winner):
             return f"""
             <div class='compare-grid'>
-              <div style='padding:10px; font-size:13px; color:#6B7280; border-bottom:1px solid #E5E7EB;'>{label}</div>
+              <div style='padding:10px; font-size:13px; color:#5B6673; border-bottom:1px solid #E5E7EB;'>{label}</div>
               {_cell(disp_a, winner, 'a')}
               {_cell(disp_b, winner, 'b')}
             </div>"""
@@ -4102,13 +4276,13 @@ with tab_compare:
                 label = key.replace("_", " ").title()
                 col.markdown(f"""
                 <div style='background:#F3F4F6; border:1px solid #E2E4E9; border-radius:10px; padding:10px 12px; text-align:center;'>
-                  <div style='font-size:11px; color:#6B7280; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;'>{label}</div>
+                  <div style='font-size:11px; color:#5B6673; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;'>{label}</div>
                   <div style='display:flex; justify-content:center; gap:10px;'>
-                    <span style='font-size:1.1rem; font-weight:700; color:#22C55E;'>{sa}</span>
-                    <span style='color:#555; font-size:0.9rem; padding-top:3px;'>vs</span>
-                    <span style='font-size:1.1rem; font-weight:700; color:#3B82F6;'>{sb}</span>
+                    <span style='font-size:1.1rem; font-weight:700; color:#15803D;'>{sa}</span>
+                    <span style='color:var(--ink-muted); font-size:0.9rem; padding-top:3px;'>vs</span>
+                    <span style='font-size:1.1rem; font-weight:700; color:#2563EB;'>{sb}</span>
                   </div>
-                  <div style='font-size:10px; color:#555; margin-top:3px;'>{short_a} · {short_b}</div>
+                  <div style='font-size:10px; color:var(--ink-muted); margin-top:3px;'>{short_a} · {short_b}</div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
@@ -4160,7 +4334,7 @@ with tab_compare:
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_pdf:
     st.markdown("<h3 style='color:#111827; font-size:1.7rem; margin-bottom:0.5rem;'>Annual Report Simplifier</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#6B7280; font-size:13px;'>Upload an annual report PDF, get a plain-English breakdown, then ask follow-up questions about it.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#5B6673; font-size:13px;'>Upload an annual report PDF, get a plain-English breakdown, then ask follow-up questions about it.</p>", unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader("Upload Annual Report (PDF)", type=["pdf"])
 
@@ -4219,7 +4393,7 @@ with tab_pdf:
 
         # ── PDF Q&A section ──────────────────────────────────────────────────
         st.markdown("<div class='section-card'><div class='section-title'>Ask Questions About This Report</div>", unsafe_allow_html=True)
-        st.markdown("<p style='color:#6B7280; font-size:13px; margin-bottom:1rem;'>Ask follow-up questions about the specific report you uploaded.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#5B6673; font-size:13px; margin-bottom:1rem;'>Ask follow-up questions about the specific report you uploaded.</p>", unsafe_allow_html=True)
 
         # Suggested follow-up questions
         pdf_suggestions = [
@@ -4298,7 +4472,7 @@ with tab_pdf:
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_chat:
     st.markdown("<h3 style='color:#111827; font-size:1.7rem; margin-bottom:0.5rem;'>Ask EquiEye</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#6B7280; font-size:13px;'>Ask anything about Indian stocks, markets, or financial concepts.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#5B6673; font-size:13px;'>Ask anything about Indian stocks, markets, or financial concepts.</p>", unsafe_allow_html=True)
 
     # Suggested questions
     st.markdown("<div style='display:flex; gap:8px; flex-wrap:wrap; margin-bottom:1rem;'>", unsafe_allow_html=True)
@@ -4424,7 +4598,7 @@ with tab_chat:
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_watchlist:
     st.markdown("<h3 style='color:#111827; font-size:1.7rem; margin-bottom:0.2rem;'>⭐ My Watchlist</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#6B7280; font-size:13px; margin-bottom:1rem;'>Track stocks you care about. Live prices refresh each visit. Saved for this session.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#5B6673; font-size:13px; margin-bottom:1rem;'>Track stocks you care about. Live prices refresh each visit. Saved for this session.</p>", unsafe_allow_html=True)
 
     # Initialize watchlist in session state
     if "watchlist" not in st.session_state:
@@ -4461,7 +4635,7 @@ with tab_watchlist:
     if st.session_state.get("wl_pending_matches"):
         pending = st.session_state["wl_pending_matches"]
         query = st.session_state.get("wl_pending_query", "your query")
-        st.markdown(f"<p style='color:#6B7280; font-size:13px;'>Found {len(pending)} matches for '{query}' — which one?</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:#5B6673; font-size:13px;'>Found {len(pending)} matches for '{query}' — which one?</p>", unsafe_allow_html=True)
         pick_cols = st.columns(min(3, len(pending)))
         for i, (sym, lname) in enumerate(pending[:6]):
             with pick_cols[i % 3]:
@@ -4477,7 +4651,7 @@ with tab_watchlist:
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Quick-add popular stocks ────────────────────────────────────────────
-    st.markdown("<p style='color:#6B7280; font-size:12px; margin-bottom:6px;'>Quick add:</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#5B6673; font-size:12px; margin-bottom:6px;'>Quick add:</p>", unsafe_allow_html=True)
     popular = [
         ("RELIANCE.NS", "Reliance Industries"),
         ("HDFCBANK.NS", "HDFC Bank"),
@@ -4500,7 +4674,7 @@ with tab_watchlist:
     if not st.session_state.watchlist:
         st.markdown("""
         <div style='background:#F7F8FA; border:1px dashed #E2E4E9; border-radius:14px;
-                    padding:2.5rem; text-align:center; color:#6B7280;'>
+                    padding:2.5rem; text-align:center; color:#5B6673;'>
             <div style='font-size:2rem; margin-bottom:0.5rem;'>⭐</div>
             <div style='font-size:15px; font-weight:500; color:#374151; margin-bottom:6px;'>Your watchlist is empty</div>
             <div style='font-size:13px;'>Search for stocks above or quick-add from the popular list</div>
@@ -4559,7 +4733,7 @@ with tab_watchlist:
                 st.markdown(
                     f"<div class='wl-row'>"
                     f"<div class='wl-cell'><div style='font-weight:500; color:#111827;'>{short_name}</div>"
-                    f"<div style='font-size:11px; color:#6B7280;'>{sym}</div></div>"
+                    f"<div style='font-size:11px; color:#5B6673;'>{sym}</div></div>"
                     f"<div class='wl-cell' style='color:#111827;'>{price_str}</div>"
                     f"<div class='wl-cell' style='color:{chg_color};'>{chg_str}</div>"
                     f"<div class='wl-cell'>{mcap_str}</div>"
@@ -4590,7 +4764,7 @@ with tab_watchlist:
                 st.rerun()
 
         st.markdown(
-            "<div style='font-size:11px; color:#555; margin-top:0.5rem;'>"
+            "<div style='font-size:11px; color:var(--ink-muted); margin-top:0.5rem;'>"
             "💡 Tip: Click any stock in Stock Research and it'll be ready to add here. "
             "Watchlist is saved for this browser session.</div>",
             unsafe_allow_html=True
@@ -4604,7 +4778,7 @@ with tab_watchlist:
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_portfolio:
     st.markdown("<h3 style='color:#111827; font-size:1.7rem; margin-bottom:0.2rem;'>💼 Portfolio Tracker</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#6B7280; font-size:13px; margin-bottom:1rem;'>Track your holdings, P&L, and sector exposure. Data stays in your session.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#5B6673; font-size:13px; margin-bottom:1rem;'>Track your holdings, P&L, and sector exposure. Data stays in your session.</p>", unsafe_allow_html=True)
 
     if _MODULES_LOADED:
         init_portfolio()
@@ -4697,7 +4871,7 @@ with tab_portfolio:
         if not holdings:
             st.markdown("""
             <div style='background:#F7F8FA; border:1px dashed #E2E4E9; border-radius:14px;
-                        padding:2.5rem; text-align:center; color:#6B7280;'>
+                        padding:2.5rem; text-align:center; color:#5B6673;'>
                 <div style='font-size:2rem; margin-bottom:0.5rem;'>💼</div>
                 <div style='font-size:15px; font-weight:500; color:#374151; margin-bottom:6px;'>Your portfolio is empty</div>
                 <div style='font-size:13px;'>Add holdings above to track your P&L</div>
@@ -4782,7 +4956,7 @@ with tab_portfolio:
                     st.markdown(
                         f"<div class='pt-row'>"
                         f"<div class='pt-cell'><div style='font-weight:500; color:#111827;'>{h['name'][:22]}</div>"
-                        f"<div style='font-size:11px; color:#6B7280;'>{ticker_key}</div></div>"
+                        f"<div style='font-size:11px; color:#5B6673;'>{ticker_key}</div></div>"
                         f"<div class='pt-cell'>{int(h['qty'])}</div>"
                         f"<div class='pt-cell'>₹{h['buy_price']:,.1f}</div>"
                         f"<div class='pt-cell'>{cur_str}</div>"

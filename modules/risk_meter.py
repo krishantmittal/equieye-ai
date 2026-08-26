@@ -36,10 +36,14 @@ from modules.sectors.engine import eval_red_flags, severity_to_risk_points
 from modules.sector_analysis import classify_sector
 
 _LEVEL_META = {
-    1: {"label": "Low Risk",      "icon": "🟢", "color": "#22C55E"},
-    2: {"label": "Moderate Risk", "icon": "🟡", "color": "#F59E0B"},
+    # These colours are rendered as TEXT, so they use the darker
+# accessible steps rather than the vivid mark colours. The vivid
+# equivalents measure 2.13:1 (green) and 1.95:1 (amber) on a light
+# surface — well below the 4.5:1 WCAG body-text minimum.
+    1: {"label": "Low Risk",      "icon": "🟢", "color": "#166534"},
+    2: {"label": "Moderate Risk", "icon": "🟡", "color": "#92400E"},
     3: {"label": "Elevated Risk", "icon": "🟠", "color": "#FB923C"},
-    4: {"label": "High Risk",     "icon": "🔴", "color": "#EF4444"},
+    4: {"label": "High Risk",     "icon": "🔴", "color": "#B91C1C"},
 }
 
 # Sectors whose business model carries structurally higher inherent risk

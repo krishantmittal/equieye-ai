@@ -1,23 +1,23 @@
 [client]
-# "minimal" only shows menu items that are explicitly set in code (e.g. via
-# st.set_page_config(menu_items=...)). Since this app doesn't set any, the
-# hamburger menu itself won't render for viewers at all. This is separate
-# from the Fork/GitHub badge on Community Cloud, which is controlled by
-# repo visibility, not this setting.
+# "minimal" only shows menu items explicitly set in code (e.g. via
+# st.set_page_config(menu_items=...)). Since this app sets none, the
+# hamburger menu doesn't render for viewers at all. Separate from the
+# Fork/GitHub badge on Community Cloud, which is controlled by repo
+# visibility, not this setting.
 toolbarMode = "minimal"
 
 [theme]
-# Without this section, Streamlit's *native* widgets (st.warning/st.info,
-# st.radio, st.number_input, st.button, st.metric, dataframes, etc.) fall
-# back to Streamlit's own default theme rather than the custom white/light
-# CSS defined in app.py — which is why the "1D/1M" radio labels and
-# st.warning text rendered white-on-light (invisible), and why the
-# Portfolio Qty/Buy Price number_input boxes rendered dark. Setting an
-# explicit light base here makes every native widget consistent with the
-# custom-styled cards and text.
+# Without this section Streamlit's *native* widgets (st.warning/st.info,
+# st.radio, st.number_input, st.button, st.metric, dataframes) fall back to
+# Streamlit's own default theme rather than the design tokens defined in
+# app.py's stylesheet — which is what previously made the "1D/1M" radio
+# labels render white-on-light (invisible) and the Portfolio Qty/Buy Price
+# inputs render dark. These values MUST stay in sync with the :root tokens
+# at the top of app.py's <style> block.
 base = "light"
-primaryColor = "#22C55E"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F5F6F8"
-textColor = "#111827"
+
+primaryColor            = "#16A34A"   # --brand-strong (buttons, focus, active tab)
+backgroundColor         = "#F6F7F9"   # --surface-page (tinted page behind cards)
+secondaryBackgroundColor = "#FFFFFF"  # --surface-card (widget/card fill)
+textColor               = "#0F172A"   # --ink
 font = "sans serif"
