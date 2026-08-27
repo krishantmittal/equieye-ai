@@ -4,7 +4,7 @@ modules/llm_utils.py
 LLM utility helpers for EquiEye AI.
 
 Key improvements:
-1. ask_llm_cached() — @st.cache_data wrapper so identical prompts don't burn Groq tokens
+1. ask_llm_cached() — TTL-cache wrapper so identical prompts don't burn Groq tokens
 2. trim_prompt() — trims context to stay within token limits
 3. compact_metrics() — builds a compact metrics string for shorter prompts
 4. Rate-limit-friendly retry with exponential backoff
@@ -13,7 +13,7 @@ Key improvements:
    instead of failing outright. Requires GEMINI_API_KEY in secrets.toml;
    if it's absent, behavior is unchanged (Groq's own friendly error is
    returned, same as before this fallback existed).
-6. Disk-backed cache (SQLite) — st.cache_data alone lives in process
+6. Disk-backed cache (SQLite) — the memory cache alone lives in process
    memory, so it's wiped whenever the app restarts (e.g. Streamlit Cloud
    waking a sleeping app). The SQLite layer below sits underneath it and
    survives restarts, so a popular stock analyzed yesterday doesn't cost
@@ -27,7 +27,9 @@ import time
 import hashlib
 import os
 import sqlite3
-import streamlit as st
+
+from core.config import get_secret
+from core.cache import ttl_cache
 
 _CACHE_TTL_SECONDS = 24 * 60 * 60  # 24 hours — shared by both cache layers
 
@@ -35,16 +37,12 @@ _CACHE_TTL_SECONDS = 24 * 60 * 60  # 24 hours — shared by both cache layers
 def _safe_secret(name: str, default: str = "") -> str:
     """Read a secret without ever raising.
 
-    st.secrets raises StreamlitSecretNotFoundError when no secrets source
-    exists at all, and it does so from `.get()` too — any access triggers
-    the underlying file load, so `.get(name, "")` is NOT safe on its own.
-    Mirrors app.py's `_secret()`; kept local so this module stays
-    independently importable.
+    Delegates to core.config.get_secret, which checks OS environment
+    variables first and falls back to st.secrets only when running under
+    Streamlit. That ordering is what lets this module run unchanged in the
+    FastAPI backend, which has no Streamlit runtime at all.
     """
-    try:
-        return st.secrets.get(name, default)
-    except Exception:
-        return default
+    return get_secret(name, default) or default
 
 # Cache DB lives next to this file's package root (repo root), not /tmp —
 # on Streamlit Cloud /tmp can be cleared more aggressively than the app's
@@ -167,15 +165,15 @@ def _call_gemini(prompt: str, system: str, max_tokens: int = 1000) -> str:
     return parts[0]["text"]
 
 
-@st.cache_data(ttl=_CACHE_TTL_SECONDS, show_spinner=False)
+@ttl_cache(ttl=_CACHE_TTL_SECONDS)
 def _cached_llm_call(prompt_hash: str, prompt: str, system: str, client_key: str, max_tokens: int = 1000, model: str = "openai/gpt-oss-120b") -> str:
     """
     Cached LLM call — two layers:
-    1. st.cache_data (in-process memory, fast, wiped on restart)
+    1. core.cache.ttl_cache (in-process memory, fast, wiped on restart)
     2. SQLite disk cache underneath it (survives restarts/sleep-wake)
     Both share the same 24-hour TTL and the same cache key components:
     (prompt_hash, model, max_tokens). `client_key` is included in the
-    st.cache_data key so different API keys don't share cache.
+    cache key so different API keys don't share cache.
     `prompt_hash` is in the signature (not the full prompt text) so
     Streamlit's cache key stays small even for large prompts.
 

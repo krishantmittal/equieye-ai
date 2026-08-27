@@ -1,0 +1,15 @@
+# FastAPI backend dependencies.
+#
+# Kept separate from requirements.txt on purpose: Streamlit Community
+# Cloud installs requirements.txt, and there is no reason to make it pull
+# a web framework the Streamlit app never imports. Install both only when
+# running the backend:
+#     pip install -r requirements.txt -r requirements-api.txt
+#
+# The shared analysis stack (yfinance, pandas, groq, requests) comes from
+# requirements.txt — services/ and modules/ are used unchanged by both
+# hosts, so their dependencies must not be duplicated here and allowed to
+# drift to a different version.
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
