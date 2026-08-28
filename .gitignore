@@ -14,3 +14,7 @@ venv/
 .DS_Store
 .vscode/
 .streamlit/secrets.toml
+
+# Local SQLite database (user watchlist/holdings) — runtime data, not source
+data/*.db
+data/*.db-journal

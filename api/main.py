@@ -35,19 +35,31 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from core.config import get_settings
 from core.cache import cache_stats
-from api.routers import stocks, compare, ai
+from core.db import init_db, DATABASE_URL
+from api.routers import stocks, compare, ai, account
 
 log = logging.getLogger("equieye")
 
 settings = get_settings()
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Create tables if absent. Safe on every boot — create_all only
+    adds missing tables and never alters existing ones."""
+    init_db()
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="EquiEye API",
     description="AI-powered equity research for Indian markets.",
     version="0.1.0",
@@ -92,6 +104,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 app.include_router(stocks.router,  prefix="/api", tags=["stocks"])
 app.include_router(compare.router, prefix="/api", tags=["compare"])
 app.include_router(ai.router,      prefix="/api", tags=["ai"])
+app.include_router(account.router, prefix="/api", tags=["account"])
 
 
 @app.get("/api/health", tags=["meta"])
@@ -109,4 +122,12 @@ def health():
             "light": settings.llm_model_light,
         },
         "cache": cache_stats(),
+        "persistence": {
+            "enabled": True,
+            # Surfaced because SQLite means an ephemeral filesystem on
+            # most PaaS hosts — i.e. data is wiped on redeploy, which is
+            # the exact bug this feature exists to fix. Worth being able
+            # to see at a glance which engine a deployment is actually on.
+            "engine": "sqlite" if DATABASE_URL.startswith("sqlite") else "postgres",
+        },
     }

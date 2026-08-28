@@ -19,12 +19,35 @@ import os
 from functools import lru_cache
 
 
+_STREAMLIT = None       # cached module handle
+_STREAMLIT_CHECKED = False
+
+
+def _streamlit_module():
+    """Return the streamlit module, or None when it isn't importable.
+
+    Resolved once and cached. Without this, every secret miss retried the
+    import — a settings read touches several keys, so a single request
+    attempted it dozens of times. On a backend host where streamlit is
+    genuinely absent that is dozens of raised-and-swallowed ImportErrors
+    per request, which is both wasteful and noisy in any import trace.
+    """
+    global _STREAMLIT, _STREAMLIT_CHECKED
+    if not _STREAMLIT_CHECKED:
+        _STREAMLIT_CHECKED = True
+        try:
+            import streamlit as st  # noqa: PLC0415 — lazy on purpose
+            _STREAMLIT = st
+        except Exception:
+            _STREAMLIT = None
+    return _STREAMLIT
+
+
 def _from_streamlit(name: str) -> str | None:
     """Read a secret from st.secrets, or None if unavailable for any
     reason (streamlit not installed, no secrets file, key absent)."""
-    try:
-        import streamlit as st  # noqa: PLC0415 — lazy on purpose
-    except Exception:
+    st = _streamlit_module()
+    if st is None:
         return None
     try:
         val = st.secrets.get(name, None)
