@@ -1,0 +1,32 @@
+# Backend deploy dependencies — the COMPLETE set for the FastAPI service.
+#
+# Use this file alone when deploying the API:
+#     pip install -r requirements-backend.txt
+#
+# Deliberately NOT `requirements.txt + requirements-api.txt`. requirements.txt
+# is the Streamlit app's list and carries streamlit, plotly, altair, PyPDF2
+# and Pillow — verified by import trace to be unused by the API. Installing
+# them on the backend host only inflates the image and slows cold starts.
+#
+# Keep in sync with requirements.txt for the SHARED packages below (yfinance,
+# pandas, requests, groq): services/ and modules/ are used by both hosts, so
+# a version that drifts between the two means the Streamlit app and the API
+# can compute different numbers from the same code.
+
+# ── Web framework ─────────────────────────────────────────────────────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+
+# ── Persistence ───────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+# Postgres driver. Only exercised when DATABASE_URL points at Postgres, but
+# installed unconditionally so a deploy can't fail at runtime on a missing
+# driver after the database is switched over.
+psycopg[binary]>=3.1.0
+
+# ── Shared analysis stack (also in requirements.txt) ──────────────────────
+yfinance>=0.2.36
+pandas>=2.0.0
+requests>=2.31.0
+groq>=0.9.0

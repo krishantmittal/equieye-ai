@@ -1,0 +1,56 @@
+# render.yaml — Render Blueprint for the EquiEye API.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+# Render reads this file; you then set the secret env vars marked
+# `sync: false` below in the dashboard (they are deliberately NOT in this
+# file, which is committed to git).
+#
+# Postgres is intentionally NOT declared here. Render's free Postgres
+# expires, and losing the database silently is precisely the failure this
+# feature exists to prevent. Provision a persistent free Postgres
+# elsewhere (Neon, Supabase) and paste its URL in as DATABASE_URL — see
+# DEPLOY.md.
+
+services:
+  - type: web
+    name: equieye-api
+    runtime: python
+    plan: free
+    region: singapore          # closest region to Indian users / NSE data
+    branch: main
+
+    # requirements-backend.txt only — NOT requirements.txt, which is the
+    # Streamlit app's list and would install streamlit/plotly/altair the
+    # API never imports.
+    buildCommand: pip install -r requirements-backend.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /api/health
+
+    envVars:
+      # 3.12 rather than the local 3.14: widely supported, and the codebase
+      # only needs >=3.10 (PEP 604/585 syntax, no 3.12+-only features).
+      - key: PYTHON_VERSION
+        value: "3.12"
+
+      # Single worker on purpose. core/cache.py is an in-process TTL cache,
+      # so each additional worker keeps its own copy — more workers means a
+      # lower hit rate and proportionally more yfinance calls from one IP,
+      # which is the fastest way to get rate-limited. Scale by adding a
+      # shared cache (Redis) before adding workers.
+      - key: WEB_CONCURRENCY
+        value: "1"
+
+      # ── Set these in the Render dashboard (never commit them) ──────────
+      - key: DATABASE_URL      # postgresql://... from Neon/Supabase
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: NEWS_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # Comma-separated frontend origins allowed to call this API.
+      # Must include the deployed frontend URL once Phase 3 ships.
+      - key: CORS_ORIGINS
+        sync: false

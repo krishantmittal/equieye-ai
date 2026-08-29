@@ -45,10 +45,23 @@ from core.config import get_secret
 def _database_url() -> str:
     url = get_secret("DATABASE_URL")
     if url:
-        # SQLAlchemy 2.x requires the postgresql:// scheme; several hosts
-        # (Heroku lineage) still hand out postgres://, which fails to parse.
+        # Two separate normalisations, both required:
+        #
+        # 1. Several hosts (Heroku lineage, and some Neon/Supabase copy
+        #    buttons) still hand out `postgres://`, which SQLAlchemy 2.x
+        #    refuses to parse at all.
+        #
+        # 2. Bare `postgresql://` resolves to the psycopg2 driver, but this
+        #    project installs psycopg 3 (see requirements-backend.txt), so
+        #    it would fail at import with "No module named 'psycopg2'" —
+        #    at engine construction, i.e. on boot, not on first query.
+        #    Pinning the +psycopg suffix selects the driver actually
+        #    installed. Verified: without this, a real Neon URL crashes the
+        #    service on startup.
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
         return url
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_dir = os.path.join(root, "data")

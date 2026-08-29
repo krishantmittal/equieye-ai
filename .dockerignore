@@ -1,0 +1,22 @@
+# Never ship secrets or local state into an image
+.streamlit/secrets.toml
+.env
+data/*.db
+data/*.db-journal
+.llm_cache/
+
+# Streamlit app — the backend image doesn't serve it
+app.py
+.streamlit/config.toml
+
+# Repo/dev cruft
+.git
+.gitignore
+.claude
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+.vscode/
