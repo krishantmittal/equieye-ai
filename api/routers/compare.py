@@ -31,6 +31,8 @@ def _clean(v):
 def _side(ticker: str) -> dict:
     try:
         info, _, fin, bs, _ = cached_stock(ticker)
+    except HTTPException:
+        raise
     except Exception as e:
         if is_connectivity_error(e):
             raise HTTPException(503, "Upstream market data is unreachable.")

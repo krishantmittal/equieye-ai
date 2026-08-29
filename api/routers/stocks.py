@@ -47,6 +47,8 @@ def _load(ticker: str):
     stock does not exist'."""
     try:
         info, hist, fin, bs, cf = cached_stock(ticker)
+    except HTTPException:
+        raise  # cached_stock's own diagnosis (e.g. degraded data) — keep it as-is
     except Exception as e:
         if is_connectivity_error(e):
             raise HTTPException(503, "Upstream market data is unreachable. Try again shortly.")

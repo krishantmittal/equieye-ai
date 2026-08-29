@@ -72,6 +72,8 @@ def moat(ticker: str):
     """Competitive-moat assessment (sector rubric + optional LLM verdict)."""
     try:
         info, _, fin, bs, _ = cached_stock(ticker)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(502, f"Could not fetch data for {ticker}.")
 
@@ -107,6 +109,8 @@ def analysis(ticker: str):
 
     try:
         info, _, fin, bs, _ = cached_stock(ticker)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(502, f"Could not fetch data for {ticker}.")
 
