@@ -54,3 +54,48 @@ services:
       # Must include the deployed frontend URL once Phase 3 ships.
       - key: CORS_ORIGINS
         sync: false
+
+  # ── Temporary region A/B probe ──────────────────────────────────────────
+  # equieye-api (above) discovered that Yahoo Finance throttles the full
+  # yfinance quoteSummary scrape from Render's Singapore IP range: price
+  # and market cap come back, but name/sector/every valuation metric are
+  # silently empty — confirmed universal across tickers, not per-ticker or
+  # transient. Render does NOT support changing an existing service's
+  # region in place, so this is a genuinely separate service in a US
+  # region, to test whether Yahoo's blocking is region/IP-range specific.
+  #
+  # Needs the SAME 5 secret env vars re-entered in the dashboard for this
+  # service specifically — Render does not share them across services.
+  #
+  # Once the answer is known: if this one is NOT throttled, either point
+  # the frontend at this URL going forward, or delete equieye-api and
+  # rename this one to take its place. If it IS also throttled, delete
+  # this service — the region hypothesis is wrong and the real fix is a
+  # proxy or a licensed data feed, not a different Render region.
+  - type: web
+    name: equieye-api-us-test
+    runtime: python
+    plan: free
+    region: ohio                # US East — furthest config from singapore
+    branch: main
+
+    buildCommand: pip install -r requirements-backend.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: DATABASE_URL      # same Neon database is fine — this is a read/logic test
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: NEWS_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
